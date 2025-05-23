@@ -1,0 +1,144 @@
+#!/bin/sh
+######################################################
+#
+# Test msgchk
+# Only tests checking of local maildrop, does not
+# test checking of POP server.
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' msgchk -
+
+expected=$MH_TEST_DIR/$$.expected
+expected_err=$MH_TEST_DIR/$$.expected_err
+actual=$MH_TEST_DIR/$$.actual
+actual_err=$MH_TEST_DIR/$$.actual_err
+
+
+# check -help
+start_test "-help"
+# Only look at first 9 lines because the rest depend on
+# whether sasl support was configured in.
+cat >"$expected" <<EOF
+Usage: msgchk [switches] [users ...]
+  switches are:
+  -[no]date
+  -[no]notify type
+  -host hostname
+  -user username
+  -port name/number
+  -version
+  -help
+EOF
+
+run_prog msgchk -help 2>&1 | head -9 >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `msgchk -v` in
+  msgchk\ --*) ;;
+  *          ) printf '%s: msgchk -v generated unexpected output\n' "$0" >&2
+               failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test "unknown switch"
+run_test "msgchk -nonexistent" 'msgchk: -nonexistent unknown'
+
+# check with no arguments and no mail waiting
+start_test "with no arguments and no mail waiting"
+run_test 'msgchk' "You don't have any mail waiting"
+
+# Use maildrop specified in mts.conf, i.e.,
+# ${MH_TEST_DIR}/Mail/maildrop, which should not yet exist.
+"${MH_LIBEXEC_DIR}"/rcvpack <"${MH_TEST_DIR}"/Mail/inbox/1 \
+  "${MH_TEST_DIR}"/Mail/maildrop
+
+# check with no arguments and mail waiting
+start_test "with no arguments and mail waiting"
+cat >"$expected" <<EOF
+You have new mail waiting; last read on
+EOF
+
+run_prog msgchk | sed -e 's/last read on.*/last read on/' >"$actual"
+check "$expected" "$actual"
+
+# check -date
+start_test "-date"
+cat >"$expected" <<EOF
+You have new mail waiting; last read on
+EOF
+
+run_prog msgchk -nodate -date | sed -e 's/last read on.*/last read on/' \
+  >"$actual"
+check "$expected" "$actual"
+
+# check -nodate
+start_test "-nodate"
+run_test 'msgchk -nodate' 'You have new mail waiting'
+
+# check -notify mail, when there is mail
+start_test "-notify mail, when there is mail"
+run_test 'msgchk -notify mail -nodate' 'You have new mail waiting'
+
+# check -notify nomail, when there is mail
+start_test "-notify nomail, when there is mail"
+run_test 'msgchk -notify nomail -nodate' 'You have new mail waiting'
+
+# check -notify all, when there is mail
+start_test "-notify all, when there is mail"
+run_test 'msgchk -notify nomail -notify all -nodate' 'You have new mail waiting'
+
+# check -nonotify mail, when there is mail
+start_test "-nonotify mail, when there is mail"
+run_test 'msgchk -nonotify mail -nodate' ''
+
+# check -nonotify nomail, when there is mail
+start_test "-nonotify nomail, when there is mail"
+run_test 'msgchk -nonotify nomail -nodate' 'You have new mail waiting'
+
+# check -nonotify all, when there is mail
+start_test "-nonotify all, when there is mail"
+run_test 'msgchk -nonotify nomail -nonotify all -nodate' ''
+
+run_prog inc -silent
+
+# check -notify mail, when there is no mail
+start_test "-notify mail, when there is no mail"
+run_test 'msgchk -notify mail -nodate' "You don't have any mail waiting"
+
+# check -notify nomail, when there is no mail
+start_test "-notify nomail, when there is no mail"
+run_test 'msgchk -notify nomail -nodate' "You don't have any mail waiting"
+
+# check -notify all, when there is no mail
+start_test "-notify all, when there is no mail"
+run_test 'msgchk -notify nomail -nonotify all -nodate' ''
+
+# check -nonotify mail, when there is no mail
+start_test "-nonotify mail, when there is no mail"
+run_test 'msgchk -nonotify mail -nodate' "You don't have any mail waiting"
+
+# check -nonotify nomail, when there is no mail
+start_test "-nonotify nomail, when there is no mail"
+run_test 'msgchk -nonotify nomail -nodate' ''
+
+# check -nonotify all, when there is no mail
+start_test "-nonotify all, when there is no mail"
+run_test 'msgchk -nonotify nomail -nonotify all -nodate' ''
+
+
+finish_test
+exit ${failed:-0}

@@ -1,0 +1,476 @@
+#! /bin/sh
+#
+# Configures and builds nmh.
+# * If this script is not invoked from an nmh source directory, it
+#   will attempt to download the nmh sources.
+# * This script retrieves configuration from the first existing nmh
+#   installation on your $PATH, if any.
+# * Unless the -y option is provided, this script then interactively
+#   walks you through confirmation of common configuration settings.
+# * If this script is run without a terminal, e.g, fed to the standard
+#   input of /bin/sh, then the -v and -y options are enabled.
+#
+# This file can be downloaded and immediately run using, e.g.,
+#   wget http://git.savannah.gnu.org/cgit/nmh.git/plain/build_nmh
+#   sh build_nmh
+#
+# Typical usage:
+# The first time you invoke this script, use the -i option to install
+# nmh in the specified location.  The script will walk you through the
+# common nmh configuration settings.  The -v option will cause display
+# of brief progress indicators.  Be sure to add the bin directory of
+# the install location to your $PATH, if not already there.
+# Subsequently, invoke this script with the -y option, to use the
+# relevant configuration settings from the installed nmh without
+# confirmation.
+#
+# Option summary:
+#   First time use:
+#     -b <branch> to specify branch to check out, only if downloading sources
+#     -i to install nmh
+#     -v to display progress
+#   Subsequent uses, assuming installed nmh bin directory is on $PATH:
+#     -y to accept all configuration options without confirmation
+#   Output control:
+#     -l <logfile name>, default 'build_nmh.log', - for stdout/stderr
+#   Advanced/developer use:
+#     -c to run 'make distcheck' instead of 'make check'
+#     -d to build nmh with optimization disabled
+#     -s to use 'make superclean': requires recent autoconf and automake,
+#        see docs/README.developers
+#     -r to build rpm
+#
+# To disable colorization of the test summary, either unset the TERM
+# environment variable or set it to dumb, e.g., TERM=dumb build_nmh.
+#
+# See the nmh MACHINES file for build prerequisites.  In addition, the rpmbuild
+# is required to be available if the -r option is used.
+
+logfile=build_nmh.log
+usage="usage: build_nmh [OPTION]... [CONFIGURE OPTIONS]...
+  [-a to analyze with scan-build (Clang Static Analyzer)]
+  [-b <branch>, only if downloading]
+  [-c to run 'make distcheck' instead of 'make check']
+  [-d to build nmh with optimization disabled]
+  [-i to install nmh]
+  [-l <logfile name>, default '$logfile']
+  [-r to build rpm]
+  [-s to use 'make superclean': requires recent autoconf and automake]
+  [-v to display progress]
+  [-y to accept all configuration options without confirmation]
+  configure options start with --
+  -v and -y are enabled if standard input is not a terminal"
+
+#### Find location of a program.  Bourne shell just puts the name in
+#### $0 if it's found from the PATH, so search that if necessary.
+finddir() {
+  case $1 in
+    */*) dirname "$1" ;;
+    *  ) IFS=:
+         for d in $PATH; do
+           [ -f "${d:=.}/$1"  -a  -x "$d/$1" ]  &&  printf %s "$d"  &&  break
+         done ;;
+  esac
+}
+
+#### Make sure user sees error output even on early termination.
+cleanup() {
+  if [ "$tmpfile" ]; then
+    #### Disable output redirection (and flush) so that we can grep.
+    #### If $tmpfile is null, don't need to do this because the
+    #### outputs weren't redirected, modulo a small race condition
+    #### between setting tmpfile and redirecting the outputs.
+    exec 1>&3 3>&- 2>&4 4>&-
+
+    if [ "$logfile" != - ]; then
+      exec 3>&1 >"$logfile" 2>&1
+    fi
+
+    if [ -f "$tmpfile" ]; then
+      cat "$tmpfile"
+      grep -E 'Error|warn' "$tmpfile"
+      rm "$tmpfile"
+    fi
+  fi
+
+  #### Put info message on stdout, and in log if not stdout.
+  if [ $status -ne 0  -o  $verbose -ge 1  -o  "$directory" ]; then
+    [ $status -eq 0 ]  &&  result=succeeded  ||  result=failed
+    if [ "$logfile" = - ]; then
+      echo "build $result"
+    else
+      message="build $result, build log is in ${directory:+$directory/}$logfile"
+      echo "$message" >&3
+    fi
+  fi
+
+  #### Heirloom shell does not like "trap - signal".
+  trap '' EXIT
+  exit $status
+}
+
+#### Exit with error message.
+die() {
+  status=1 # It should already be, but just in case the code below changes.
+  echo "$0: $*" 1>&2
+  cleanup
+}
+
+#### Download sources from repo.  With git and on master, the
+#### directory will be nmh, but with snapshot, it will be
+#### nmh-master.
+download_sources() {
+  [ $verbose -ge 1 ]  &&  echo downloading . . . >&3
+  gitdir=`finddir git`
+  if [ "$gitdir" ]; then
+    #### Use git repo.
+    [ "$verbose" -eq 0 ]  &&  git_opts=--quiet
+    [ "$branch" = master ]  ||
+      git_opts="${git_opts:+$git_opts }--branch $branch"
+    if "$gitdir"/git clone $git_opts "git://$gitrepo/nmh.git" >&3
+    then
+      directory=nmh
+      cd "$directory"  ||  die "failed to clone $directory"
+      printf "commit %s\n" `git log --max-count=1 --pretty=format:%H`
+    else
+      die 'failed to clone git repo'
+    fi
+  else
+    [ -e nmh-"$branch" ]  &&  die "nmh-$branch exists, will not overrwrite"
+
+    #### Use snapshot.
+    tarball="nmh-$branch.tar.gz"
+    repo="http://$gitrepo/cgit/nmh.git/snapshot"
+    snapshot="$repo/$tarball"
+    if [ "`finddir wget`" ]; then
+      [ "$verbose" -eq 0 ] && wget_opts='--quiet'
+      wget --output-document - $wget_opts "$snapshot" 2>&3 | gzip -d | tar xf -
+    elif [ "`finddir curl`" ]; then
+      [ "$verbose" -eq 0 ] && curl_opts='--silent --show-error'
+      curl --location $curl_opts "$snapshot" 2>&3 | gzip -d | tar xf -
+    else
+      die 'unable to find program to download nmh sources'
+    fi
+
+    if [ -d nmh-"$branch" ]; then
+      directory=nmh-"$branch"
+      cd "$directory"  ||  die "failed to download and extract $directory"
+    else
+      die "failed to download nmh-$branch sources"
+    fi
+  fi
+}
+
+#### Output summary of test results from make check.
+report_test_results() {
+  divider=`echo "$checkoutput" | grep ==== | head -1`
+  tests_not_run=`echo "$checkoutput" | grep 'test was not run'`
+  tests_failed=`echo "$checkoutput" | grep FAIL`
+  echo $divider
+  printf %s ${tests_not_run:+"$tests_not_run"'
+'}
+  printf %s ${tests_failed:+"$tests_failed"'
+'}
+  printf %s ${tests_summary:+"$tests_summary"'
+'}
+  echo $divider
+}
+
+directory=
+download=0
+gitrepo=git.savannah.nongnu.org
+invocation="$0 $*"
+status=1
+tmpfile=/tmp/build_nmh-$$.log
+
+#### Redirect all output to tmp file.  Then on EXIT, copy it to either
+#### logfile or stdout.  Also, grep it for errors and warnings.  Set
+#### tmpfile just prior to this, see cleanup().
+exec 3>&1 4>&2 >"$tmpfile" 2>&1
+
+
+####
+#### Interpret command arguments.
+####
+analyze=
+branch=master
+check=check
+config_opts=
+debug=0
+install=0
+build_rpm=0
+superclean=0
+if [ -t 0 ]; then
+  verbose=0
+  yes=0
+else
+  #### To support download of this script and piping it directly to /bin/sh.
+  verbose=1
+  yes=1
+fi
+
+#### With dash, heirloom shell, and posh, need to catch INT and QUIT
+#### in order for cleanup to be call:  just EXIT isn't sufficient.
+trap cleanup EXIT INT QUIT
+
+have_configure_opts=0
+while getopts 'acb:dil:rsvy-?' arg; do
+  case $arg in
+    a  ) analyze='scan-build ' ;;
+    b  ) branch="$OPTARG" ;;
+    c  ) check=distcheck ;;
+    d  ) debug=1 ;;
+    i  ) install=1 ;;
+    l  ) logfile=$OPTARG ;;
+    r  ) build_rpm=1 ;;
+    s  ) superclean=1 ;;
+    v  ) verbose=1 ;;
+    y  ) yes=1 ;;
+    -  ) have_configure_opts=1; break ;;
+    '?') echo "$0: $usage"; logfile=-; status=0; exit ;;
+  esac
+done
+shift `expr $OPTIND - 1`
+
+echo "$invocation"
+
+if [ $have_configure_opts ]; then
+  #### Pass first -- option and all remaining options to configure.
+  config_opts="$*"
+  DISTCHECK_CONFIGURE_FLAGS="$*"
+else
+  #### No non-option command line arguments are supported.
+  [ $# -gt 0 ]  &&  die "$usage"
+fi
+
+#### Check to see that we're in a nmh source directory.
+grep 'the authors of nmh' COPYRIGHT >/dev/null 2>&1  ||  download=1
+
+####
+#### Set up configure options.
+####
+
+#### Here are the config options that we will try to detect, then
+#### confirm, and finally set.
+config_prefix=/usr/local/nmh
+config_locking=
+config_mts=smtp
+config_smtpserver=localhost
+config_debug=n
+
+
+#### Figure out whether or not to use -n with tail.
+case `printf 'OK\n' | tail -n 1 2>&1` in
+  OK) tail='tail -n ' ;;
+  *)  tail='tail -' ;;
+esac
+
+if install-mh -check >/dev/null 2>&1; then
+  #### Determine config options from installed nmh.
+  mhbin=`finddir install-mh`
+
+  config_prefix=`cd $mhbin/.. && pwd`
+
+  mtsconf=`mhparam etcdir`/mts.conf
+  if [ -f "$mtsconf" ]; then
+    mts_entry=`grep '^mts:' "$mtsconf"`
+    if [ "$mts_entry" ]; then
+      mts=`echo "$mts_entry" | sed -e 's/^mts: *//'`
+      if [ "$mts"  -a  "$mts" != smtp ]; then
+        config_mts="$mts"
+      fi
+    fi
+
+    mtsconfservers=`grep '^servers:' "$mtsconf"`
+    if [ "$mtsconfservers" ]; then
+      servers=`echo "$mtsconfservers" | sed -e 's/^servers: *//'`
+      [ "$servers" ]  &&  config_smtpserver="$servers"
+    fi
+  fi
+fi
+
+#### Don't confirm debug interactively below; obey the -d option.
+[ $debug -ge 1 ]  &&  config_debug=y
+
+if [ $yes -eq 0 ]; then
+  #### Confirm each config setting with user.
+  printf 'Install prefix [%s]: ' $config_prefix >&3
+  read prefix
+  [ "$prefix" ]  &&  config_prefix="$prefix"
+
+  printf 'Locking type (dot|fcntl|flock|lockf) [determined by configure]: ' >&3
+  read locking
+  [ "$locking" ]  &&  config_locking="$locking"
+
+  printf 'MTS (smtp|sendmail/smtp|sendmail/pipe) [%s]: ' $config_mts >&3
+  read mts
+  [ "$mts" ]  &&  config_mts="$mts"
+
+  if [ "$config_mts" = smtp ]; then
+    printf 'SMTP server [%s]: ' $config_smtpserver >&3
+    read server
+    [ "$server" ]  &&  config_smtpserver="$servers"
+  fi
+fi
+
+config_opts="${config_opts:+${config_opts} }--prefix=$config_prefix"
+
+[ "$config_locking" ]  &&
+  config_opts="$config_opts --with-locking=$config_locking"
+[ "$config_mts"  -a  "$config_mts" != smtp ]  &&
+  config_opts="$config_opts --with-mts=$config_mts"
+[ "$config_smtpserver"  -a  "$config_smtpserver" != localhost ]  &&
+  config_opts="$config_opts --with-smtpserver=$config_smtpserver"
+
+#### dotlocking, the usual default, requires chgrp and chmod of inc.
+installpriv=
+if [ $install -ge 1  -a  "$LOGNAME" != root ]; then
+  if [ "$config_locking" = dot ]; then
+    echo "$0: "'install requires chgrp and chmod 2755'
+    echo 'so will sudo to install.  Terminate with Ctrl-C if unacceptable.'
+    installpriv=sudo
+  fi
+fi
+
+printf '\n%s %s %s %s\n\n' "`uname -m`" "`uname -s`" "`uname -r`" "`uname -v`"
+[ -f /etc/os-release ]  &&  printf '%s\n\n' "`cat /etc/os-release`"
+
+[ $download -eq 1 ]  &&  download_sources
+
+####
+#### Set up with autoconfig if necessary.
+####
+if [ -f Makefile ]; then
+  [ $verbose -ge 1 ]  &&  echo cleaning . . . >&3
+  if [ $superclean -ge 1 ]; then
+    make superclean >/dev/null
+  else
+    make distclean >/dev/null
+  fi
+fi
+
+if [ ! -f configure  -o  ! -f Makefile.in ]; then
+  [ $verbose -ge 1 ]  &&  echo autoconfiguring . . . >&3
+  rm -fr autom4te.cache
+  ./autogen.sh
+  [ $? -ne 0 ]  &&
+    die "autogen failed, see MACHINES file for autoconf,
+automake, flex, and bison requirements"
+fi
+
+
+####
+#### Build.
+####
+[ $verbose -ge 1 ]  &&  echo configuring . . . >&3
+if [ -z "$CFLAGS" ]; then
+  #### Only use these flags with gcc.
+  [ -f /bin/gcc -o -L /bin/gcc ] && cc=gcc || cc=cc
+  if $cc -dM -E - </dev/null 2>&1 | grep __GNUC__ >/dev/null; then
+    #### configure will supply -g -O2 with gcc, but only if CFLAGS
+    #### isn't defined.  Always add -g here.
+    #### Try all this, borrowed from Fedora 32 build.
+    CFLAGS="-g -std=c99 -pedantic -Wformat -Werror=format-security \
+-Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong \
+-grecord-gcc-switches -fasynchronous-unwind-tables \
+-fno-omit-frame-pointer"
+
+    #### -fstack-clash-protection triggers internal compiler error
+    #### in 64-bit Cygwin gcc 11.2.0 on sbr/fmt_scan.c.
+    case `uname -s` in
+      CYGWIN*) fstackclashprotection= ;;
+      *      ) fstackclashprotection='-fstack-clash-protection ' ;;
+    esac
+    for opt in ${fstackclashprotection} -fcf-protection; do
+        if $cc -x c -c $opt /dev/null -o /dev/null 2>/dev/null; then
+            CFLAGS="$CFLAGS $opt"
+        fi
+    done
+
+    if ! $cc -x c -c $CFLAGS /dev/null -o /dev/null 2>/dev/null; then
+        #### All that wasn't supported.  The following should be.
+        CFLAGS='-g -std=c99 -pedantic'
+    fi
+    if [ "$config_debug" = n ]; then
+      CFLAGS="$CFLAGS -O2 -Wp,-D_FORTIFY_SOURCE=3"
+    else
+      CFLAGS="$CFLAGS -O0"
+    fi
+
+    if [ `uname -s` = SunOS ]; then
+      #### Add all this to work around multiple bool definitions,
+      #### both #define and typedef, on Solaris 11.4.
+      CFLAGS="$CFLAGS -D_POSIX_C_SOURCE=200809L -D__EXTENSIONS__ \
+-I/usr/xpg4/include -I."
+    fi
+  fi
+fi
+
+printf "\n${analyze}./configure $config_opts${CFLAGS:+ CFLAGS=\"${CFLAGS}\"}\n"
+${analyze}./configure $config_opts ${CFLAGS:+CFLAGS="${CFLAGS}"}
+status=$?
+
+if [ "$analyze" ]; then
+  #### scan-build configure doesn't put -D_GNU_SOURCE_ in Makefile
+  tmpmakefile=/tmp/Makefile-$$
+  sed -e 's/^\(AM_CPPFLAGS =\) */\1 -D_GNU_SOURCE/' Makefile >$tmpmakefile
+  mv $tmpmakefile Makefile
+fi
+
+if [ $status -eq 0 ]; then
+  [ $verbose -ge 1 ]  &&  echo building . . . >&3
+  ${analyze}make
+  status=$?
+
+  if [ $status -eq 0 ]; then
+    if [ "$TESTS_SHELL"x = x ]; then
+      #### Bonus:  use heirloom shell to test, if available, and if
+      #### TESTS_SHELL hadn't already been set.
+      heirloom_shell=/usr/lib/heirloom/5bin/sh
+      if [ -x "$heirloom_shell" ]; then
+        TESTS_SHELL="$heirloom_shell"; export TESTS_SHELL
+      fi
+    fi
+
+    if [ "$CFLAGS" ]; then
+        #### Pass DISTCHECK_CONFIGURE_FLAGS through an environment
+        #### variable to avoid automake's quoting.
+        DISTCHECK_CONFIGURE_FLAGS="$DISTCHECK_CONFIGURE_FLAGS CFLAGS='${CFLAGS}'"
+        export DISTCHECK_CONFIGURE_FLAGS
+    fi
+
+    [ $verbose -ge 1 ]  &&  echo testing . . . >&3
+    [ "${TERM:-dumb}" = dumb ]  &&  color=no  ||  color=always
+    checkoutput=`make $check AM_COLOR_TESTS=$color`
+    status=$?
+
+    tests_summary=`echo "$checkoutput" | grep tests`
+    #### If multiple tests not run, that line will be caught by the
+    #### "grep tests" above.
+    if [ "$tests_summary" ]; then
+      test_results=`report_test_results`
+      echo "$test_results"
+      [ $verbose -ge 1 ]  &&  echo "$test_results" >&3
+    fi
+    [ "$check" = distcheck ]  &&  echo "$checkoutput" | ${tail}4
+
+    if [ $status -eq 0 ]; then
+      if [ $install -ge 1 ]; then
+        [ $verbose -ge 1 ]  &&  echo installing . . . >&3
+        ($installpriv make install) >/dev/null
+        status=$?
+      fi
+
+      if [ $status -eq 0  -a  $build_rpm -ge 1 ]; then
+        [ $verbose -ge 1 ]  &&  echo building rpm . . . >&3
+        make rpm >/dev/null
+        status=$?
+      fi
+    fi
+  fi
+else
+  echo "see nmh MACHINES file for build dependences"
+fi
+
+#### Will call cleanup, which will exit with $status.
+exit

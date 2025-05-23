@@ -1,0 +1,112 @@
+#!/bin/sh
+######################################################
+#
+# Test that whatnow's "ls" copes with directory names
+# which have spaces in them (see bug #23319)
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# Set TERM to get consistent output.
+TERM=dumb; export TERM
+
+cd "$MH_TEST_DIR"
+testname="baz's boz"
+testname_quoted="baz\'s\ boz"
+touch "$testname"
+# whatnow's attach stuff needs a draft to work on
+cp "$MH_TEST_DIR/Mail/inbox/1" "$MH_TEST_DIR/Mail/draft"
+
+expectederr=$MH_TEST_DIR/$$.expectederr
+actualerr=$MH_TEST_DIR/$$.actualerr
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+rm -f $expected $expectederr $actual $actualerr
+touch $expected $expectederr $actual $actualerr
+
+#
+# Sigh.  Different readline versions change echoing behavior, so we need
+# to deal.
+#
+
+set +e
+whatnowtest=`echo cd | whatnow -prompt ''`
+set -e
+
+case ${whatnowtest} in
+    cd) cat >"$expected" <<EOF
+attach $testname_quoted
+alist
+$testname
+detach $testname_quoted
+alist
+EOF
+readline=1
+    ;;
+    "") cat >"$expected" <<EOF
+$testname
+EOF
+readline=0
+    ;;
+    *) echo "Unknown response to whatnow readline test"
+    echo "Response is: ${whatnowtest}"
+    exit 1
+    ;;
+esac
+
+# whatnow's exit status is always 1 so that is not a failure
+set +e
+echo "attach $testname_quoted" | \
+  run_prog whatnow -noedit -prompt '' 2>>$actualerr >>$actual
+echo "alist" | \
+  run_prog whatnow -noedit -prompt '' 2>>$actualerr >>$actual
+echo "detach $testname_quoted" | \
+  run_prog whatnow -noedit -prompt '' 2>>$actualerr >>$actual
+echo "alist" | \
+  run_prog whatnow -noedit -prompt '' 2>>$actualerr >>$actual
+set -e
+
+check "$expectederr" "$actualerr"
+check "$expected" "$actual"
+
+if [ "$readline" = 0 ]; then
+cat >"$expected" <<EOF
+whatnow: attach command requires file argument(s).
+whatnow: attach command requires file argument(s).
+Attaching ${MH_TEST_DIR}/Mail/context as a text/plain
+EOF
+else
+cat >"$expected" <<EOF
+at
+whatnow: attach command requires file argument(s).
+at -v
+whatnow: attach command requires file argument(s).
+at -v Mail/context
+Attaching ${MH_TEST_DIR}/Mail/context as a text/plain
+quit -delete
+EOF
+fi
+
+printf '%s\n' \
+  'at' \
+  'at -v' \
+  'at -v Mail/context' \
+  'quit -delete' | whatnow -prompt '' 2>&1 | \
+  sed -e 's/; charset=us-ascii//' >"$actual"
+
+check "$expected" "$actual"
+
+test ${failed:-0} -eq 0  &&  rm "$testname"
+
+exit $failed

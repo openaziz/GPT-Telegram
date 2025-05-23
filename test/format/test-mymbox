@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# Test that the %(mymbox) function correctly determines whether or not
+# a particular email address is "mine" or not
+#
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+#### Remove existing Local-Mailbox: profile component, if any.
+grep -v 'Local-Mailbox: ' "$MH" > "$MH".new
+mv -f "$MH".new "$MH"
+
+user=`id -nu`
+set +e
+host=`${MH_OBJ_DIR}/test/getcanon`
+set -e
+
+output=`run_prog ${MH_LIBEXEC_DIR}/ap -format '%(mymbox{text})' "${user}"`
+run_test "echo $output" 1 "Basic user test"
+output=`run_prog ${MH_LIBEXEC_DIR}/ap -format '%(mymbox{text})' "${user}@${host}"`
+run_test "echo $output" 1 "Basic user@host test"
+run_test "${MH_LIBEXEC_DIR}/ap -format %(mymbox{text}) nosuchuser@nosuchhost.blah" \
+         0 "Basic non-matching test"
+
+myname="Random User <random@user.something.com>"
+
+#### Add Local-Mailbox profile component.
+echo "Local-Mailbox: ${myname}" >> "$MH"
+
+run_test "echo \
+         `run_prog ${MH_LIBEXEC_DIR}/ap -format '%(mymbox{text})' "${myname}"`" \
+         1 "Local-Mailbox test"
+
+output=`run_prog ${MH_LIBEXEC_DIR}/ap -format '%(mymbox{text})' "${user}@${host}"`
+run_test "echo $output" 0 "Local-Mailbox overriding user@host test"
+
+#### Test getusername() when there is a Local-Mailbox profile component.
+run_test 'fmttest -raw -format %(me) ""' "${user}"
+
+# Add an Alternate-Mailbox.  This caused ismymbox() to lose the
+# Local-Mailbox, Bug #36635: -nocc me doesn't account for
+# Alternate-Mailboxes.
+printf 'Alternate-Mailboxes: user@example.com\n' >> $MH
+run_test "echo \
+         `run_prog ${MH_LIBEXEC_DIR}/ap -format '%(mymbox{text})' "${myname}"`" \
+         1 "Local-Mailbox with Alternate-Mailbox test"
+
+# check getmymbox, without match
+start_test "getmymbox, without match"
+run_test 'fmttest -message -format %(getmymbox{from}) first' ''
+
+# check getmyaddr, without match
+start_test "getmyaddr, without match"
+run_test 'fmttest -message -format %(getmyaddr{from}) first' ''
+
+grep -v 'Alternate-Mailboxes: ' "$MH" > "$MH".new
+mv -f "$MH".new "$MH"
+cat >>"$MH" <<EOF
+Alternate-Mailboxes: test1@example.com
+EOF
+
+# check getmymbox, with match
+start_test "getmymbox, with match"
+run_test 'fmttest -message -format %(getmymbox{from}) first' \
+         'Test1 <test1@example.com>'
+
+# check getmyaddr, with match
+start_test "getmyaddr, with match"
+run_test 'fmttest -message -format %(getmyaddr{from}) first' \
+         'test1@example.com'
+
+# check getmymbox and getmyaddr, with match of other than first address in
+start_test "getmymbox and getmyaddr, with match of other than first address in"
+#   component
+cat >`mhpath new` <<'EOF'
+From: Test11 <test11@example.com>
+Cc: Test0 <test0@example.com>, Test3 <test3@example.com>,
+    Test1 <test1@example.com>, Test2 <test2@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 11@test.nmh
+Subject: Testing message 11
+
+This is message number 11
+EOF
+run_test 'fmttest -message -format %(getmymbox{cc}) last' \
+         'Test1 <test1@example.com>'
+run_test 'fmttest -message -format %(getmyaddr{cc}) last' \
+         'test1@example.com'
+
+finish_test
+exit $failed

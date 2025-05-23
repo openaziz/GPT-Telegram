@@ -1,0 +1,336 @@
+.TH MH-DRAFT %manext5% 2012-03-18 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mh-draft \- draft folder facility for nmh message system
+.SH DESCRIPTION
+There are a number of interesting advanced facilities for the composition of
+outgoing mail.
+.SS "The Draft Folder"
+The
+.BR comp ,
+.BR dist ,
+.BR forw ,
+.BR repl ,
+.BR send ,
+and
+.B whom
+commands each take the switches
+.B \-draftfolder
+.I +folder
+and
+.B \-draftmessage
+.IR msg ,
+which allow you to manipulate the various draft messages you are composing.
+.PP
+If
+.B \-draftfolder
+.I +folder
+is used, draft messages will be constructed in the indicated folder.  The
+.RI \*(lq Draft\-Folder \*(rq
+profile entry may be used to specify a default draft folder.
+.PP
+If the switch
+.B \-draftmessage
+.I msg
+is given, the specified draft is used to compose the message.  If
+.B \-draftmessage
+.I msg
+is not used, then the draft defaults to `new' (create a new draft)
+unless the user invokes
+.B comp
+with
+.BR \-use ,
+in which case the default is `cur'.
+.PP
+Hence, the user may have several message compositions in progress
+simultaneously.  Now, all of the
+.B nmh
+tools are available on each of the user's message drafts (e.g.
+.BR show ,
+.BR scan ,
+.BR pick ,
+and so on).  If the folder does not exist, the user is asked if it should be
+created (just like with
+.BR refile ).
+The last draft message the user was composing is known as `cur'
+in the draft folder.
+.PP
+Using
+.BR send ,
+the user can send drafts using the standard
+.B nmh
+`msgs' convention with
+.B \-draftmessage
+.IR msgs .
+If no `msgs' are given, it defaults to `cur'.
+.PP
+In addition, all of these programs have a
+.B \-nodraftfolder
+switch, which undoes the last occurrence of
+.B \-draftfolder
+.I folder
+(useful if a default is specified in the user's
+.B nmh
+profile).
+.PP
+If the user does not give the
+.B \-draftfolder
+.I +folder
+switch, then all these commands act \*(lqnormally\*(rq.  Note that the
+.B \-draft
+switch to
+.B send
+and
+.B show
+still refers to the file called `draft' in the user's
+.B nmh
+directory.  In the interests of economy of expression, when using
+.B comp
+or
+.BR send ,
+the user needn't prefix the draft `msg' or `msgs' with
+.BR \-draftmessage .
+Both of these commands accept a `file' or `files' argument and they will,
+if given
+.B \-draftfolder
+.IR +folder ,
+treat these arguments as `msg' or `msgs'.  (This may appear to be
+inconsistent, at first, but it saves a lot of typing.)  Hence,
+.PP
+.RS
+.nf
+send -draftfolder +drafts first
+.fi
+.RE
+.PP
+is the same as
+.PP
+.RS
+.nf
+send -draftfolder +drafts -draftmessage first
+.fi
+.RE
+.PP
+To make all this a bit more clear, here are some examples.  Let's assume
+that the following entries are in the
+.B nmh
+profile:
+.PP
+.RS 5
+.nf
+Draft\-Folder: drafts
+sendf: \-draftfolder +drafts
+.fi
+.RE
+.PP
+Furthermore, let's assume that the program
+.B sendf
+is a (symbolic) link in the user's
+.I $HOME/bin/
+directory to
+.BR send .
+Now,
+.PP
+.RS 5
+.nf
+comp
+dist
+forw
+repl
+.fi
+.RE
+.PP
+will construct the message draft in the `drafts' folder using the `new'
+message number.  Furthermore, they each define `cur' in this folder to
+be that message draft.  If the user were to use the
+.B quit
+option at the `What now?' prompt, then later on, if no other draft composition
+was done, the draft could be sent with simply
+.PP
+.RS 5
+.nf
+sendf
+.fi
+.RE
+.PP
+Or, if more editing was required, the draft could be edited with
+.PP
+.RS 5
+.nf
+comp -use
+.fi
+.RE
+.PP
+If other drafts had been composed in the meantime, so that this message
+draft was no longer known as `cur' in the `draft' folder, then
+the user could
+.B scan
+the folder to see which message draft should be used for editing or sending.
+Clever users could even employ a backquoted
+.B pick
+to do the work:
+.PP
+.RS 5
+.nf
+comp -use \`pick +drafts -to nmh-workers\`
+.fi
+.RE
+.PP
+or
+.PP
+.RS 5
+.nf
+sendf \`pick +drafts -to nmh-workers\`
+.fi
+.RE
+.PP
+Note that in the
+.B comp
+example, the output from
+.B pick
+must resolve to a single message draft (it makes no sense to talk about
+composing two or more drafts with one invocation of
+.BR comp ).
+In contrast, in the
+.B send
+example, as many message drafts as desired can appear, since
+.B send
+doesn't mind sending more than one draft at a time.
+.PP
+Note that the argument
+.B \-draftfolder
+.I +folder
+is not included in the profile entry for
+.BR send ,
+since when
+.BR comp ,
+et al, invoke
+.B send
+directly, they supply
+.B send
+with the Unix pathname of the message draft;
+.I not
+a
+.B \-draftmessage
+.I msg
+argument.  As far as
+.B send
+is concerned, a draft folder is not being used.
+.PP
+It is important to realize that
+.B nmh
+treats the draft folder like a standard
+.B nmh
+folder in nearly all respects.  There are two exceptions:
+.PP
+First, under no circumstances will the
+.B \-draftfolder
+.I folder
+switch cause the named folder to become the current folder.
+Obviously, if the folder appeared in the context of a standard
+.I +folder
+argument to an
+.B nmh
+program, as in
+.PP
+.RS 5
+.nf
+scan +drafts
+.fi
+.RE
+.PP
+it might become the current folder, depending on the context changes of the
+.B nmh
+program in question.
+.PP
+Second, although conceptually
+.B send
+deletes the `msgs' named in the draft folder, it does not call
+.I delete\-prog
+to perform the deletion.
+.SS "What Happens if the Draft Exists"
+When the
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+commands
+are invoked and the draft you indicated already exists, these programs
+will prompt the user for a response directing the program's action.
+The prompt is
+.PP
+.RS 5
+.nf
+Draft "/home/foobar/nmhbox/draft" exists (xx bytes).
+Disposition?
+.fi
+.RE
+.PP
+The appropriate responses and their meanings are:
+.PP
+.RS 5
+.PD 0
+.TP 10
+.B replace
+deletes the draft and starts afresh
+.TP
+.B list
+lists the draft
+.TP
+.B refile
+files the draft into a folder and starts afresh
+.TP 10
+.B quit
+leaves the draft intact and exits
+.PD
+.RE
+.PP
+In addition, if you specified
+.B \-draftfolder
+.I folder
+to the command, then one other response will be accepted:
+.PP
+.RS 5
+.PD 0
+.TP 10
+.B new
+creates a new draft
+.PD
+.RE
+.PP
+just as if
+.B \-draftmessage
+.I new
+had been given.
+Finally, the
+.B comp
+command will accept one more response:
+.PP
+.RS 5
+.PD 0
+.TP 10
+.B use
+re-uses the draft
+.PD
+.RE
+.PP
+just as if
+.B \-use
+had been given.
+.SH FILES
+.PP
+.TP 20
+$HOME/.mh_profile
+The user's profile.
+.SH "PROFILE COMPONENTS"
+.PP
+.PD 0
+.TP 20
+Draft\-Folder:
+For a default draft folder
+.PD
+.SH CONTEXT
+None

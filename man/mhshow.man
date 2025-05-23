@@ -1,0 +1,702 @@
+.TH MHSHOW %manext1% 2015-02-08 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhshow \- display nmh MIME messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhshow
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-file
+.IR file ]
+.RB [ \-part
+.IR number ]
+\&...
+.RB [ \-type
+.IR content ]
+\&...
+.RB [ \-prefer
+.IR content ]
+\&...
+.RB [ \-noprefer ]
+.RB [ \-concat " | " \-noconcat ]
+.RB [ \-textonly " | " \-notextonly ]
+.RB [ \-inlineonly " | " \-noinlineonly ]
+.RB [ \-header " | " \-noheader ]
+.RB [ \-form
+.IR formfile ]
+.RB [ \-markform
+.IR formfile ]
+.ad
+.SH DESCRIPTION
+The
+.B mhshow
+command displays contents of a MIME (multi-media) message, or collection
+of messages.
+.PP
+.B mhshow
+manipulates multi-media messages as specified in RFC 2045 to RFC 2049.
+Currently
+.B mhshow
+only supports encodings in message bodies, and does not support the
+encoding of message headers as specified in RFC 2047.
+.PP
+By default,
+.B mhshow
+will display only the text parts of a message that are not marked as
+attachments.  This behavior can be changed by the
+.B \-notextonly
+and
+.B \-noinlineonly
+switches.
+In addition, by using the
+.BR \-part ,
+.BR \-type ,
+and
+.B \-prefer
+switches, you may limit and reorder the set of parts to be displayed,
+based on part number and/or content type.
+The inclusion of any
+.B \-part
+or
+.B \-type
+switches will override the default settings of
+.B \-textonly
+and
+.BR \-inlineonly .
+.PP
+The
+.B \-header
+switch controls whether
+.B mhshow
+will print a message separator header before each message that it
+displays.  The header format can be controlled using
+.BR \-headerform ,
+to specify a file containing
+.IR mh\-format (5)
+instructions.  A copy of the built-in default headerform can be found
+in %nmhetcdir%/mhshow.header, for reference.
+In addition to the normal set of
+.IR mh\-format (5)
+instructions, a "%{folder}" escape provides a string representing
+the current folder.
+.PP
+By default,
+.B mhshow
+will concatenate all content under one pager.  If you want each part to
+be displayed separately, you can override the default behavior with
+.B \-noconcat.
+.PP
+The
+.B \-file
+.I file
+switch directs
+.B mhshow
+to use the specified file as the source message, rather than a message
+from a folder.  If you specify this file as \*(lq-\*(rq, then
+.B mhshow
+will accept the source message on the standard input.  Note that the
+file, or input from standard input, should be a validly formatted message,
+just like any other
+.B nmh
+message.  It should
+.I not
+be in mail drop format (to convert a file in
+mail drop format to a folder of
+.B nmh
+messages, see
+.IR inc (1)).
+.PP
+The
+.B \-part
+switch can be given (one or more times) to restrict the set of
+subparts that will be displayed.  (Obviously with no
+.B \-part
+switches, all parts will be considered.)  If a
+.B \-part
+switch specifies a specific subpart (i.e., a "leaf" in the tree of
+MIME parts), then that part will always be displayed.  If a
+.B \-part
+switch references a multipart/alternative part, then (in
+the absence of a
+.B \-type
+switch) only the default subpart of that multipart will be displayed.
+.PP
+A part specification consists of a series of numbers separated by dots.
+For example, in a multipart content containing three parts, these
+would be named as 1, 2, and 3, respectively.  If part 2 was also a
+multipart content containing two parts, these would be named as 2.1 and
+2.2, respectively.  Note that the
+.B \-part
+switch is effective only for messages containing a multipart content.
+If a message has some other kind of content, or if the part is itself
+another multipart content, the
+.B \-part
+switch will not prevent the content from being acted upon.
+.PP
+The
+.B \-type
+switch can also be used to restrict (or, when used in conjunction with
+.BR \-part ,
+to further restrict) the display of parts according to content type.
+One or more
+.B \-type
+switches part will only select the first match from a multipart/alternative,
+even if there is more than one subpart that matches (one of) the given
+content type(s).
+.PP
+Using either
+.B \-part
+or
+.B \-type
+switches alone will cause either switch to select the part(s) they match.
+Using them together will select only the part(s) matched by both (sets of)
+switches.  In other words, the result is the intersection, and not the union,
+of their separate match results.
+.PP
+A content specification consists of a content type and a subtype.
+The initial list of \*(lqstandard\*(rq content types and subtypes can
+be found in RFC 2046.
+.PP
+A list of commonly used contents is briefly reproduced here:
+.PP
+.RS 5
+.nf
+.ta \w'application  'u
+Type	Subtypes
+----	--------
+text	plain, enriched
+multipart	mixed, alternative, digest, parallel
+message	rfc822, external-body
+application	octet-stream, postscript
+image	jpeg, gif, png
+audio	basic
+video	mpeg
+.fi
+.RE
+.PP
+A legal MIME message must contain a subtype specification.
+.PP
+To specify a content, regardless of its subtype, just use the
+name of the content, e.g., \*(lqaudio\*(rq.  To specify a specific
+subtype, separate the two with a slash, e.g., \*(lqaudio/basic\*(rq.
+Note that regardless of the values given to the
+.B \-type
+switch, a multipart content (of any subtype listed above) is always
+acted upon.  Further note that if the
+.B \-type
+switch is used, and it is desirable to act on a message/external-body
+content, then the
+.B \-type
+switch must be used twice: once for message/external-body and once
+for the content externally referenced.
+.PP
+In the absence of
+.BR \-prefer ,
+.B mhshow
+will select the "best" displayable subpart from multipart/alternative
+content.  The
+.B \-prefer
+switch can be used (one or more times, in order of ascending
+preference) to let MH know which content types from a
+multipart/alternative MIME part are preferred by the user, in order to
+override the default selection for display.  For example, mail is
+often sent containing both plaintext and HTML-formatted versions of
+the same content, and the HTML version is usually indicated to be the
+"best" format for viewing.  Using \*(lq-prefer text/plain\*(rq will
+cause the plaintext version to be displayed if possible, but still
+allow display of the HTML part if there is no plaintext subpart
+available.  Using \*(lq-prefer text/plain -prefer image/png\*(rq
+would add a preference for PNG images, which might or might not
+ever appear in the same multipart/alternative section with text/plain.
+Implementation note:  RFC 2046 requires that the subparts
+of a multipart/alternative be ordered according to "faithfulness to
+the original content", and MH by default selects the subpart ranked
+most "faithful" by that ordering.  The
+.B \-prefer
+switch reorders the alternative parts (only internally, never changing
+the message file) to move the user's preferred part(s) to the "most
+faithful" position.  Thus, when viewed by
+.BR mhlist ,
+the ordering of multipart/alternative parts will appear to change when
+invoked with or without various
+.B \-prefer
+switches.  Since the last of multiple 
+.B \-prefer
+options "wins", a
+.B \-prefer
+on the command line will override any in a profile entry.
+.PP
+The
+.B \-noprefer
+switch will cancel any previous
+.B \-prefer
+switches.
+.SS "Unseen Sequence"
+If the profile entry \*(lqUnseen\-Sequence\*(rq is present and
+non-empty, then
+.B mhshow
+will remove each of the messages shown from each sequence named by
+the profile entry.
+.SS "Showing the Contents"
+The headers of each message are displayed with the
+.I mhlproc
+(usually
+.BR mhl ),
+using the standard format file,
+.IR mhl.headers .
+You may specify an alternative format file with the
+.B \-form
+.I formfile
+switch.  If the format file
+.I mhl.null
+is specified, then the display of the message headers is suppressed.
+.PP
+Next, the contents are extracted from the message and are stored in
+a temporary file.  Usually, the name of the temporary file is the
+word \*(lqmhshow\*(rq followed by a string of characters.  Occasionally,
+the method used to display a content (described next), requires that
+the file end in a specific suffix.  For example, the
+.B soffice
+command (part of the StarOffice package) can be used to display
+Microsoft Word content, but it uses the suffix to determine how to display
+the file.  If no suffix is present, the file is not correctly loaded.
+Similarly, older versions of the
+.B gs
+command append a \*(lq.ps\*(rq suffix to the filename if one was missing.
+As a result, these cannot be used to read the default temporary file.
+.PP
+To get around this, your profile can contain lines of the form:
+.PP
+.RS 5
+mhshow-suffix-<type>/<subtype>: <suffix>
+.RE
+.PP
+or
+.PP
+.RS 5
+mhshow-suffix-<type>: <suffix>
+.RE
+.PP
+to specify a suffix which can be automatically added to the temporary
+file created for a specific content type.  For example, the following
+lines might appear in your profile:
+.PP
+.RS 5
+.nf
+mhshow-suffix-text: .txt
+mhshow-suffix-application/msword: .doc
+mhshow-suffix-application/PostScript: .ps
+.fi
+.RE
+.PP
+to automatically append a suffix to the temporary files.
+.PP
+The matching with the content type identifier is case-insensitive, both in
+mhshow-suffix-<type> and mhshow-show-<type> (below) profile entries.
+.PP
+The method used to display the different contents in the messages bodies
+will be determined by a \*(lqdisplay string\*(rq.  To find the display
+string,
+.B mhshow
+will first search your profile for an entry of the form:
+.PP
+.RS 5
+mhshow-show-<type>/<subtype>
+.RE
+.PP
+If this isn't found,
+.B mhshow
+will search for an entry of the form:
+.PP
+.RS 5
+mhshow-show-<type>
+.RE
+.PP
+to determine the display string.
+.PP
+If a display string is found, any escapes (given below) will be expanded.
+The result will be executed under \*(lq/bin/sh\*(rq, with the standard input
+set to the content.
+.PP
+The display string may contain the following escapes:
+.PP
+.RS 5
+.nf
+.ta \w'%F        'u
+%a	   Insert parameters from Content-Type field
+%{parameter} Insert the parameter value from the Content-Type field
+%f	   Insert filename containing content
+%F	   %f, and stdin is terminal not content
+%l	   display listing prior to displaying content
+%s	   Insert content subtype
+%d	   Insert content description
+%%	   Insert the character %
+.fi
+.RE
+.PP
+.B mhshow
+will execute at most one display string at any given time, and wait
+for the current display string to finish execution before executing
+the next display string.
+.PP
+The {parameter} escape is typically used in a command line argument
+that should only be present if it has a non-null value.  It is highly
+recommended that the entire escape be wrapped in double quotes.
+Shell parameter expansion can construct the argument only when it is
+non-null, e.g.,
+.PP
+.RS 5
+.nf
+mhshow-show-text/html: charset="%{charset}";
+  w3m ${charset:+-I $charset} -T text/html %F
+.fi
+.RE
+.PP
+That example also shows the use of indentation to signify continuation:
+the two text lines combine to form a single entry.  Note that when
+dealing with text that has been converted internally by
+.IR iconv (3),
+the \*(lqcharset\*(rq parameter will reflect the target character set
+of the text, rather than the original character set in the message.
+.PP
+Note that if the content being displayed is multipart, but not one of
+the subtypes listed above, then the f- and F-escapes expand to multiple
+filenames, one for each subordinate content.  Furthermore, stdin is not
+redirected from the terminal to the content.
+.PP
+If a display string is not found,
+.B mhshow
+behaves as if these profile entries were supplied and supported:
+.PP
+.RS 5
+.nf
+mhshow-show-text/plain: %lmoreproc %F
+mhshow-show-message/rfc822: %lshow -file %F
+.fi
+.RE
+.PP
+Note that \*(lqmoreproc\*(rq is not supported in user profile display
+strings.
+.PP
+If a subtype of type text doesn't have a profile entry, it will be
+treated as text/plain.
+.PP
+.B mhshow
+has default methods for handling multipart messages of subtype
+mixed, alternative, parallel, and digest.  Any unknown subtype of type
+multipart (without a profile entry), will be treated as multipart/mixed.
+.PP
+If none of these apply, then
+.B mhshow
+will check to see if the message has an application/octet-stream content
+with parameter \*(lqtype=tar\*(rq.
+If so,
+.B mhshow
+will use an appropriate command.  If not,
+.B mhshow
+will complain.
+.PP
+Example entries might be:
+.PP
+.RS 5
+.nf
+mhshow-show-audio/basic: raw2audio 2>/dev/null | play
+mhshow-show-image: xv %f
+mhshow-show-application/PostScript: lpr -Pps
+.fi
+.RE
+.PP
+If an f- or F-escape is not quoted with single quotes, its expansion
+will be wrapped with single quotes.
+.PP
+Finally,
+.B mhshow
+will process each message serially\0--\0it won't start showing the next
+message until all the commands executed to display the current message
+have terminated.
+.SS "Showing Alternate Character Sets"
+If
+.B mhshow
+was built with
+.IR iconv (3),
+then all text/plain parts of the message(s) will be displayed using
+the character set of the current locale.  See
+.IR mhparam (1)
+for how to determine whether your
+.B nmh
+installation includes
+.IR iconv (3)
+support.  To convert text parts other than text/plain, or if
+.B mhshow
+was not built with
+.IR iconv ,
+an external program can be used, as described next.
+.PP
+Because a content of type text might be in a non-ASCII character
+set, when
+.B mhshow
+encounters a \*(lqcharset\*(rq parameter for this content, it checks
+if your terminal can display this character set natively.
+.B mhshow
+checks this by examining the current character set defined by the
+.IR locale (1)
+environment variables.  If the value of the locale character set is equal
+to the value of the charset parameter, then
+.B mhshow
+assumes it can
+display this content without any additional setup.  If the locale is not
+set properly,
+.B mhshow
+will assume a value of \*(lqUS-ASCII\*(rq.
+If the character set cannot be displayed natively, then
+.B mhshow
+will look for an entry of the form:
+.PP
+.RS 5
+mhshow-charset-<charset>
+.RE
+.PP
+which should contain a command creating an environment to render
+the character set.  This command string should containing a single
+\*(lq%s\*(rq, which will be filled-in with the command to display the
+content.
+.PP
+Example entries might be:
+.PP
+.RS 5
+mhshow-charset-iso-8859-1: xterm -fn '-*-*-medium-r-normal-*-*-120-*-*-c-*-iso8859-*' -e %s
+.RE
+.PP
+or
+.PP
+.RS 5
+mhshow-charset-iso-8859-1: '%s'
+.RE
+.PP
+The first example tells
+.B mhshow
+to start
+.B xterm
+and load the appropriate character set for that message content.
+The second example
+tells
+.B mhshow
+that your pager (or other program handling that content type) can
+handle that character set, and that no special processing is
+needed beforehand.
+.PP
+Note that many pagers strip off the high-order bit, or have problems
+displaying text with the high-order bit set.  However, the pager
+.B less
+has support for single-octet character sets.  For example, messages
+encoded in the ISO-8859-1 character set can be viewed using
+.BR less ,
+with these environment variable settings:
+.PP
+.RS 5
+.nf
+.ta \w'%F  'u
+LESSCHARSET latin1
+LESS        -f
+.fi
+.RE
+.PP
+The first setting tells
+.B less
+to use the ISO-8859-1 definition to determine whether a character is
+\*(lqnormal\*(rq, \*(lqcontrol\*(lq, or \*(lqbinary\*(rq.
+The second setting tells
+.B less
+not to warn you if it encounters a file that has non-ASCII characters.
+Then, simply set the
+.I moreproc
+profile entry to
+.BR less ,
+and it will get called automatically.  (To handle other single-octet
+character sets, look at the
+.IR less (1)
+manual entry for information about the LESSCHARDEF environment variable.)
+.SS "External Access"
+For contents of type message/external-body,
+.B mhshow
+supports these access-types:
+.IP \(bu 4
+afs
+.IP \(bu 4
+anon-ftp
+.IP \(bu 4
+ftp
+.IP \(bu 4
+local-file
+.IP \(bu 4
+mail-server
+.IP \(bu 4
+url
+.PP
+For the \*(lqanon-ftp\*(rq and \*(lqftp\*(rq access types,
+.B mhshow
+will look for the \*(lqnmh-access-ftp\*(rq profile entry, e.g.,
+.PP
+.RS 5
+nmh-access-ftp: myftp.sh
+.RE
+.PP
+to determine the pathname of a program to perform the FTP retrieval.
+.PP
+This program is invoked with these arguments:
+.PP
+.RS 5
+.nf
+domain name of FTP-site
+username
+password
+remote directory
+remote filename
+local filename
+\*(lqascii\*(rq or \*(lqbinary\*(rq
+.fi
+.RE
+.PP
+The program should terminate with an exit status of zero if the
+retrieval is successful, and a non-zero exit status otherwise.
+.PP
+For the \*(lqurl\*(rq access-type,
+.B mhshow
+will look for the \*(lqnmh-access-url\*(rq profile entry.  See
+.IR mhstore (1)
+for more details.
+.SS "User Environment"
+Because the display environment in which
+.B mhshow
+operates may vary for different machines,
+.B mhshow
+will look for the environment variable MHSHOW.  If present, this specifies
+the name of an additional user profile which should be read.
+Hence, when a user logs in on a particular display device, this environment
+variable should be set to refer to a file containing definitions useful
+for the given display device.
+Normally, only entries that deal with the methods to display different
+content type and subtypes
+.PP
+.RS 5
+.nf
+mhshow-show-<type>/<subtype>
+mhshow-show-<type>
+.fi
+.RE
+.PP
+need be present in this additional profile.  Finally,
+.B mhshow
+will attempt to consult
+.PP
+.RS 5
+%nmhetcdir%/mhn.defaults
+.RE
+.PP
+which is created automatically during
+.B nmh
+installation.
+.PP
+See "Profile Lookup" in
+.IR mh-profile (5)
+for the profile search order, and for how duplicate entries are treated.
+.SS Content-Type Marker
+.B mhshow
+will display a marker containing information about the part being displayed
+next.  The default marker can be changed using the
+.B \-markform
+switch to specify a file containing
+.IR mh\-format (5)
+instructions to use when displaying the content marker.  A copy of the
+default markform can be found in %nmhetcdir%/mhshow.marker, for
+reference.  In addition to the normal set of
+.IR mh\-format (5)
+instructions, the following
+.I component
+escapes are supported:
+.PP
+.RS 5
+.nf
+.ta \w'cdispo-<PARAM>  'u +\w'Returns   'u
+.I "Escape	Returns	Description"
+part	string	MIME part number
+content\-type	string	MIME Content\-Type of part
+description	string	Content\-Description header
+disposition	string	Content disposition (attachment or inline)
+ctype-<PARAM>	string	Value of <PARAM> from Content\-Type header
+cdispo-<PARAM>	string	Value of <PARAM> from
+		Content\-Disposition header
+%(size)	integer	The size of the decoded part, in bytes
+%(unseen)	boolean	Returns true for suppressed parts
+.fi
+In this context, the %(unseen) function indicates whether
+.B mhshow
+has decided to not display a particular part due to the
+.B \-textonly
+or
+.B \-inlineonly
+switches.
+.RE
+All MIME parameters and the \*(lqContent-Description\*(rq header will have
+RFC 2231 decoding applied and be converted to the local character set.
+.SH FILES
+.B mhshow
+looks for all format files and mhn.defaults in multiple locations:
+absolute pathnames are accessed directly, tilde expansion is done on
+usernames, and files are searched for in the user's
+.I Mail
+directory, as specified in their profile.  If not found there, the directory
+.RI \*(lq %nmhetcdir% \*(rq
+is checked.
+.PP
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+^$MHSHOW~^Additional profile entries
+^%nmhetcdir%/mhn.defaults~^System default MIME profile entries
+^%nmhetcdir%/mhl.headers~^The headers template
+^%nmhetcdir%/mhshow.marker~^Example content marker
+^%nmhetcdir%/mhshow.header~^Example message separator header
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^Unseen\-Sequence:~^To name sequences denoting unseen messages
+^mhlproc:~^Default program to display message headers
+^nmh-access-ftp:~^Program to retrieve contents via FTP
+^nmh-access-url:~^Program to retrieve contents via HTTP
+^mhshow-charset-<charset>~^Template for environment to render character sets
+^mhshow-show-<type>*~^Template for displaying contents
+^moreproc:~^Default program to display text/plain content
+.fi
+.SH "SEE ALSO"
+.IR iconv (3),
+.IR mhbuild (1),
+.IR mhl (1),
+.IR mhlist (1),
+.IR mhparam (1),
+.IR mhstore (1),
+.IR sendfiles (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` msgs "' defaults to cur"
+.RB ` \-concat '
+.RB ` \-textonly '
+.RB ` \-inlineonly '
+.RB ` \-form\ mhl.headers '
+.fi
+.SH CONTEXT
+If a folder is given, it will become the current folder.  The last
+message selected will become the current message.

@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Test that we can retrieve the local mailbox name from the profile via
+# component functions
+#
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+testname="Some User <some@domain.com>"
+
+#### Remove existing Local-Mailbox: profile component, if any.  Then
+#### add one.
+grep -v 'Local-Mailbox: ' ${MH} > ${MH}.new
+mv -f ${MH}.new ${MH}
+echo "Local-Mailbox: ${testname}" >> ${MH}
+
+# We can use "ap" to get the output of format commands
+
+testoutput=`run_prog ${MH_LIBEXEC_DIR}/ap -format "%(localmbox)" ignore`
+
+if [ x"${testname}" != x"${testoutput}" ]; then
+	echo "Expected ${testname}, got ${testoutput}"
+	exit 1
+fi
+
+exit 0

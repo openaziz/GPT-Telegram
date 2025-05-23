@@ -1,0 +1,60 @@
+#!/bin/sh
+######################################################
+#
+# Test that the manpages don't have any syntax errors
+# as detected by groff.
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+require_prog groff
+
+cd ${MH_INST_DIR}${mandir} || exit 1
+
+# groff will exit with zero status even if warnings
+# were emitted, so we have to jump through hoops to
+# find out if any were emitted.
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+# There aren't any expected warnings at the moment but
+# this mechanism does let us add them if necessary later.
+rm -f "$expected" "$actual"
+touch "$expected" "$actual"
+
+
+warnings="-ww"
+
+#### If the prefix is too long, groff will report that it can't break
+#### the `aliasfile' line in ali.1 and the `replaliases' line in
+#### mhbuild.1.
+length=`echo $prefix | awk '{print length($0)}'`
+[ $length -gt 31 ]  &&  warnings="${warnings} -Wbreak"
+
+#### OpenBSD's mandoc spits out a lot of "unbalance .el request" warnings;
+#### -Wel suppresses them.
+groff -Tutf8 -mandoc -ww man1/ali.1 >/dev/null 2>>"$actual"
+if grep warning "$actual" >/dev/null; then
+  warnings="$warnings -Wel"
+fi
+rm -f "$actual"
+touch "$actual"
+
+for manpage in man?/*.?; do
+  LC_ALL=C grep -n '[^	 -~]' /dev/null "$manpage" 2>&1 |
+  sed 's/^/non-ascii:/' >>"$actual"
+  groff -Tutf8 -mandoc $warnings "$manpage" >/dev/null 2>>"$actual"
+done
+
+check "$expected" "$actual"
+
+exit $failed

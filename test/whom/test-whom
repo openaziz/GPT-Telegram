@@ -1,0 +1,148 @@
+#!/bin/sh
+######################################################
+#
+# Test whom
+#
+######################################################
+
+# Not tested:
+# -check, -client, -server, -port, -user, -sasl, -saslmech, -snoop, -tls, -notls
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' whom -
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+cd $MH_TEST_DIR
+
+cat >$MH_TEST_DIR/Mail/draft <<'EOF'
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Subject: Testing message 1
+--------
+This is a draft message.
+EOF
+
+# check -help
+start_test "-help"
+# Only look at first 10 lines because the rest depend on
+# whether sasl support was configured in.
+cat >$expected <<EOF
+Usage: whom [switches] [file]
+  switches are:
+  -alias aliasfile
+  -[no]check
+  -draft
+  -(draftf)older +folder
+  -(draftm)essage msg
+  -nodraftfolder
+  -version
+  -help
+EOF
+
+run_prog whom -help 2>&1 | head -10 >$actual
+check $expected $actual
+
+# check -version
+start_test "-version"
+case `whom -v` in
+  whom\ --*) ;;
+  *       ) echo "$0: whom -v generated unexpected output" 1>&2
+            failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check with no options
+start_test "with no options"
+run_test 'whom' '  -- Network Recipients --
+  user at example.com'
+
+# check -nocheck
+start_test "-nocheck"
+run_test 'whom -check -nocheck' '  -- Network Recipients --
+  user at example.com'
+
+# check with file specified
+start_test "with file specified"
+run_test "whom $MH_TEST_DIR/Mail/draft" '  -- Network Recipients --
+  user at example.com'
+
+# check -draftmessage
+start_test "-draftmessage"
+run_test "whom -draftm draft" '  -- Network Recipients --
+  user at example.com'
+
+# check -draftfolder with -draftmessage
+start_test "-draftfolder with -draftmessage"
+folder +drafts -create >/dev/null
+folder +inbox -fast >/dev/null
+cp $MH_TEST_DIR/Mail/draft $MH_TEST_DIR/Mail/drafts/1
+run_test "whom -draftfolder +drafts -draftm 1" \
+'  -- Network Recipients --
+  user at example.com'
+
+# check -draftfolder with current draftmessage
+start_test "-draftfolder with current draftmessage"
+folder +drafts 1 >/dev/null
+run_test "whom -draftfolder +drafts" \
+'  -- Network Recipients --
+  user at example.com'
+
+# check -nodraftfolder
+start_test "-nodraftfolder"
+run_test 'whom -draftfolder +nonexistent -nodraftfolder' \
+'  -- Network Recipients --
+  user at example.com'
+
+# check -draft, though I'm not sure that it's useful.  Note that it
+start_test "-draft, though I'm not sure that it's useful.  Note that it"
+# must appear after the file argument when run standalone.
+run_test "whom $MH_TEST_DIR/Mail/drafts/1 -draft" \
+'  -- Network Recipients --
+  user at example.com'
+
+# check -alias
+start_test "-alias"
+rm -f $MH_TEST_DIR/Mail/draft
+cat >$MH_TEST_DIR/Mail/draft <<'EOF'
+From: Test1 <test1@example.com>
+To: u
+Subject: Testing message 1
+--------
+This is a draft message.
+EOF
+
+cat >$MH_TEST_DIR/Mail/nmhaliases <<'EOF'
+u: user1@example.com
+EOF
+run_test 'whom -alias nmhaliases' '  -- Network Recipients --
+  user1 at example.com'
+
+# check -alias with nonexistent aliasfile
+start_test "-alias with nonexistent aliasfile"
+run_test 'whom -alias nonexistent' \
+"whom: aliasing error in nonexistent - unable to read 'nonexistent'"
+
+# check etcpath() when it does not allocate its return value
+start_test "etcpath() when it does not allocate its return value"
+#### An aliases file that doesn't begin with /, ./, ../, or ~, and
+#### isn't in the Mail or nmh etc directory, will be returned as-is.
+#### Make sure that alias() doesn't try to free() it.
+mailaliases="Mail/aliases"
+echo 'u: user@example.com' >"$mailaliases"
+run_test "whom -alias $mailaliases" '  -- Network Recipients --
+  user at example.com'
+rm -f "$mailaliases"
+
+finish_test
+exit $failed

@@ -1,0 +1,230 @@
+.TH MHLIST %manext1% 2015-02-06 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhlist \- list information about nmh MIME messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhlist
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-file
+.IR file ]
+.RB [ \-part
+.IR number ]
+\&...
+.RB [ \-type
+.IR content ]
+\&...
+.RB [ \-prefer
+.IR content ]
+\&...
+.RB [ \-noprefer ]
+.RB [ \-headers " | " \-noheaders ]
+.RB [ \-realsize " | " \-norealsize ]
+.RB [ \-changecur " | " \-nochangecur ]
+.RB [ \-verbose " | " \-noverbose ]
+.RB [ \-disposition " | " \-nodisposition ]
+.ad
+.SH DESCRIPTION
+The
+.B mhlist
+command allows you to list information (a table of contents, essentially)
+about the various parts of a collection of MIME (multi-media) messages.
+.PP
+.B mhlist
+manipulates MIME messages as specified in RFC 2045 to RFC 2049 (See
+.IR mhbuild (1)).
+.PP
+The
+.B \-headers
+switch indicates that a one-line banner should be displayed above the
+listing (the default).
+.PP
+The
+.B \-realsize
+switch tells
+.B mhlist
+to evaluate the \*(lqnative\*(rq (decoded) format of each content prior
+to listing.  This provides an accurate count at the expense of a small delay.
+In either case, sizes will be expressed using SI prefix abbreviations
+(K/M/G/T), which are based on factors of 1000.
+.PP
+If the
+.B \-verbose
+switch is present, then the listing will show any \*(lqextra\*(rq
+information that is present in the message, such as comments in the
+\*(lqContent-Type\*(rq header.
+.PP
+If the
+.B \-disposition
+switch is present, then the listing will show any relevant information from
+the \*(lqContent-Disposition\*(rq header.
+.PP
+The option
+.B \-file
+.I file
+directs
+.B mhlist
+to use the specified file as the source message, rather than a message
+from a folder.  If you specify this file as \*(lq-\*(rq, then
+.B mhlist
+will accept the source message on the standard input.  Note that the
+file, or input from standard input should be a validly formatted
+message, just like any other
+.B nmh
+message.  It should
+.I not
+be in mail drop format (to convert a file in
+mail drop format to a folder of
+.B nmh
+messages, see
+.IR inc (1)).
+.PP
+By default,
+.B mhlist
+will list information about the entire message (all of its parts).
+By using the
+.BR \-part ,
+.BR \-type ,
+and
+.B \-prefer
+switches, you may limit and reorder the set of parts to be listed,
+based on part number and/or content type.
+.PP
+A part specification consists of a series of numbers separated by
+dots.  For example, in a multipart content containing three parts,
+these would be named as 1, 2, and 3, respectively.  If part 2 was also
+a multipart content containing two parts, these would be named as 2.1
+and 2.2, respectively.  Note that the
+.B \-part
+switch is effective only for messages containing a multipart content.
+If a message has some other kind of content, or if the part is itself
+another multipart content, the
+.B \-part
+switch will not prevent the content from being acted upon.
+.PP
+The
+.B \-type
+switch can also be used to restrict (or, when used in conjunction with
+.BR \-part ,
+to further restrict) the selection of parts according to content type.
+One or more
+.B \-type
+switches part will only select the first match from a multipart/alternative,
+even if there is more than one subpart that matches (one of) the given
+content type(s).
+.PP
+Using either
+.B \-part
+or
+.B \-type
+switches alone will cause either to select the part(s) they match.
+Using them together will select only the part(s) matched by both
+(sets of) switches.  In other words, the result is the intersection,
+and not the union, of their separate match results.
+.PP
+A content specification consists of a content type and a subtype.
+The initial list of \*(lqstandard\*(rq content types and subtypes can
+be found in RFC 2046.
+.PP
+A list of commonly used contents is briefly reproduced here:
+.PP
+.RS 5
+.nf
+.ta \w'application  'u
+Type	Subtypes
+----	--------
+text	plain, enriched
+multipart	mixed, alternative, digest, parallel
+message	rfc822, external-body
+application	octet-stream, postscript
+image	jpeg, gif, png
+audio	basic
+video	mpeg
+.fi
+.RE
+.PP
+A legal MIME message must contain a subtype specification.
+.PP
+To specify a content, regardless of its subtype, just use the
+name of the content, e.g., \*(lqaudio\*(rq.  To specify a specific
+subtype, separate the two with a slash, e.g., \*(lqaudio/basic\*(rq.
+Note that regardless of the values given to the
+.B \-type
+switch, a multipart content (of any subtype listed above) is always
+acted upon.  Further note that if the
+.B \-type
+switch is used, and it is desirable to act on a message/external-body
+content, then the
+.B \-type
+switch must be used twice: once for message/external-body and once
+for the content externally referenced.
+.PP
+By default, the parts of a multipart/alternative part are listed in
+the reverse order of their placement in the message.  The listing,
+therefore, is in decreasing order of preference, as defined in RFC
+2046.  The
+.B \-prefer
+switch can be used (one or more times, in order of ascending
+preference) to let MH know which content types from a
+multipart/alternative MIME part are preferred by the user, in order to
+override the default preference order.  Thus, when viewed by
+.BR mhlist ,
+the ordering of multipart/alternative parts will appear to change when
+invoked with or without various
+.B \-prefer
+switches.
+The
+.B \-noprefer
+switch will cancel any previous
+.B \-prefer
+switches.
+The
+.B \-prefer
+and
+.B \-noprefer
+switches are functionally most important for
+.BR mhshow ,
+but are also implemented in
+.B mhlist
+and
+.B mhstore
+to make common part numbering possible across all three programs.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+.fi
+.SH "SEE ALSO"
+.IR mhbuild (1),
+.IR mhshow (1),
+.IR mhstore (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` msgs "' defaults to cur"
+.RB ` \-headers '
+.RB ` \-realsize '
+.RB ` \-changecur '
+.RB ` \-noverbose '
+.RB ` \-nodisposition '
+.fi
+.SH CONTEXT
+If a folder is given, it will become the current folder.  The last
+message selected will become the current message, unless the
+.B \-nochangecur
+option is specified.

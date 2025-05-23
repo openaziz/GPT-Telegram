@@ -1,0 +1,288 @@
+# INSTALL -- installation instructions
+#
+
+--------------------------------
+Installing nmh, guided by script
+--------------------------------
+For routine installation on popular platforms, the build_nmh shell
+script can be used to guide you through configuration.  It will then
+build and optionally (with -i) install in the configured location.
+
+
+------------------------
+Installing nmh, manually
+------------------------
+Please read all of the following instructions before you begin
+building nmh.
+
+You should check the MACHINES file to see if there are any specific
+build instructions for your operating system.  To build nmh, you will
+need an ANSI C compiler such as gcc.
+
+0) If you have obtained nmh by checking it out of the git repository,
+   you will need to run the GNU autotools to regenerate some files.
+   (If your directory already contains a file 'config.h.in' then this
+   has already been done and you do not need to do it.)  You can
+   regenerate the files by running the command
+
+   ./autogen.sh
+
+   (Note that if you're doing nmh development, you should look at
+   docs/README.developers, since there is other developer-friendly
+   advice there as well.)
+
+   If you have obtained nmh in the form of a tar archive and are
+   trying to unpack it with cpio:  due to an apparent bug in cpio, it
+   might fail with "Malformed number" error messages.  Try another
+   tool to unpack, such as tar or pax.
+
+1) From the top-level source directory, run the command
+
+   ./configure [options]
+
+   This will check the configuration of your OS, and create the
+   include file config.h, as well as the Makefile.
+
+   The configure script accepts various options.  The options of
+   most interest are listed in a section below.  To see the list
+   of all available options, you can run
+
+   ./configure --help
+
+2) make
+
+3) (Optional) make check
+
+   This takes a bit of time, around one minute on a modern machine,
+   but is highly recommended.
+
+   test/inc/test-deb359167 uses valgrind, which detects use of an
+   uninitialized variable on older Linux distributions such as
+   Mandriva 2007.0 and CentOS 5.4.  That particular failure is
+   beyond the scope of nmh and can be ignored.
+
+4) make install
+
+   Note that if you have [n]mh files in your install directories with
+   the same names as the files being installed, the old ones will get
+   overwritten without any warning.
+
+5) Edit the file `mts.conf' (installed in the nmh `etc' directory)
+   and make any necessary changes for the mail transport interface
+   you are using.
+
+   The default `mts.conf' file assumes you retrieve new mail from
+   a local (or NFS mounted) maildrop, and send outgoing mail by
+   injecting the message to a mail transfer agent (such as sendmail)
+   on the local machine via SMTP.
+
+   If, instead, all your mail sending and receiving occurs on a
+   remote POP/SMTP server, you will need to look at the values of the
+   variables "localname", "pophost", and "servers":
+
+    a) "localname" defines the hostname that nmh considers local.
+       If not set, then nmh queries your OS for this value.  You will
+       want to change this if you wish your e-mail to appear as if it
+       originated on the POP server.
+
+    b) "pophost" defines the server that runs the POP daemon, and to
+       which `inc' and `msgchk' will always query for new mail.
+
+    c) "servers" defines the server to which you send outgoing SMTP
+       traffic.  See the discussion of the --with-smtpserver configure
+       option below.
+
+   If you don't want to hardcode pophost in `mts.conf', you can use
+   the `-host' and `-user' options to `inc' and `msgchk'.
+
+   Check the `mh-tailor' man page for a list of all the available options
+   for this file.
+
+6) Edit the file `mhn.defaults' (installed in the nmh `etc' directory).
+   This file contains the default profile entries for the nmh command
+   `mhn' and is created by the script `mhn.defaults.sh'.  This script
+   will search a generic path (essentially your $PATH) for programs to
+   handle various content types (for example, xv to display images).
+   You can re-run this script and give it a more tailored path.  You may
+   want to re-run this script later if you install new programs to
+   display content.  An example of this is:
+
+    % cd support/general
+    % ./mhn.defaults.sh /usr/local/bin:/usr/X11/bin:/usr/ucb > mhn.defaults
+
+   and then move `mhn.defaults' into the nmh `etc' directory.
+
+   The `mhn.defaults.sh' script only searches for a simple set of programs.
+   If you have specialized programs to handle various types, you will need
+   to edit the `mhn.defaults' file manually.  The syntax of this file is
+   described in the man page for `mhn', and in section 9.4 of the book
+   "MH & xmh: Email for Users and Programmers", 3rd edition, by Jerry Peek,
+   on the Internet at <http://rand-mh.sourceforge.net/book/mh/confmhn.html>.
+
+7) Add an optional global mh.profile, if desired.  This profile should be
+   placed in the nmh `etc' directory with the name `mh.profile'.  This
+   file will be used to construct the initial .mh_profile of a new nmh
+   user, but will not be consulted after that.
+
+-----------------------------------------------
+Compiler options, or using a different compiler
+-----------------------------------------------
+
+By default, configure will use the "gcc" compiler if found.  You can
+use a different compiler, or add unusual options for compiling or
+linking that the "configure" script does not know about, by giving
+"configure" initial values for these on its command line or in its
+environment.  For example,
+
+    ./configure CC=c99 CFLAGS=-O2 LIBS=-lposix
+
+If you wish to add options that are only used at compile time instead of
+link time, you can use the CPPFLAGS variable:
+
+   ./configure CPPFLAGS='-Wextra -Wno-sign-compare'
+
+If you want to add to both compile and link flags at build time
+without putting them in the configuration, you can use the AM_CFLAGS
+Makefile macro:
+
+    make AM_CFLAGS=--coverage
+
+----------------------------------------
+Building nmh on additional architectures
+----------------------------------------
+To build nmh on additional architectures, you can do a "make distclean".
+This should restore the nmh source distribution back to its original
+state.  You can then configure nmh as above on other architectures in
+which you wish to build nmh.  Or alternatively, you can use a different
+build directory for each architecture.
+
+---------------------------------
+Using a different build directory
+---------------------------------
+You can compile the nmh in a different directory from the one containing
+the source code.  Doing so allows you to compile it on more than one
+architecture at the same time.  To do this, you must use a version of
+"make" that supports the "VPATH" variable, such as GNU "make".  "cd" to
+the directory where you want the object files and executables to go and
+run the "configure" script.  "configure" automatically checks for the
+source code in the directory that "configure" is in.  For example,
+
+    cd /usr/local/solaris/nmh
+    /usr/local/src/nmh-1.5/configure
+    make
+
+---------------------
+Options for configure
+---------------------
+--prefix=DIR     (DEFAULT is /usr/local/nmh)
+     This will change the base prefix for the installation location
+     for the various parts of nmh.  Unless overridden, nmh is installed
+     in ${prefix}/bin, ${prefix}/etc, ${prefix}/lib, ${prefix}/man.
+
+--bindir=DIR     (DEFAULT is ${prefix}/bin)
+     nmh's binaries (show, inc, comp, ...) are installed here.
+
+--libexecdir=DIR     (DEFAULT is ${prefix}/libexec)
+     nmh's support binaries (post, slocal, mhl, ...) are installed
+     in ${libexecdir}/nmh.
+
+--sysconfdir=DIR     (DEFAULT is ${prefix}/etc)
+     nmh's config files (mts.conf, mhn.defaults, ...) are installed
+     in ${sysconfdir}/nmh.
+
+--mandir=DIR     (DEFAULT is ${prefix}/man)
+     nmh's man pages are installed here.
+
+--with-editor=EDITOR  (DEFAULT is vi)
+     specify the full path of the default editor to use.  If this
+     option is not given, then the configuration process will search
+     for the `vi' command and use it as the default.  If you wish to
+     specify an interface which is compatible with MH, then use the
+     nmh command `prompter'.  If you specify `prompter', then you don't
+     need to give the full pathname.
+
+--with-locking=LOCKTYPE    (DEFAULT is based on operating system)
+     Specify the locking mechanism when attempting to "inc" or
+     "msgchk" a local mail spool. Valid options are "dot",
+     "fcntl", "flock", and "lockf". Of the four, dot-locking
+     requires no special kernel or filesystem support, and simply
+     creates a file called "FILE.lock" to indicate that "FILE" is
+     locked.
+
+     In order to be effective, you should contact the site
+     administrator to find out what locking mechanisms other
+     mail delivery and user programs respect. The most common
+     reason not to use dot-locking is if the mail spool directory
+     is not world- or user-writeable, and thus a lock file cannot
+     be created.
+
+--enable-lockdir=DIR	(DEFAULT is disabled)
+     If dot locking is being used, store all dot-lock files in "DIR".
+     The default is to store them in the directory of the file being
+     locked.
+
+--with-mts=MTS   (DEFAULT is smtp)
+     Specify the default mail transport system you want to use.  The three
+     acceptable options are "smtp" (which is the default),
+     "sendmail/smtp", and "sendmail/pipe".  This value will be put into
+     the mts.conf file.  You may find it convenient to specify a value
+     at configure-time, however, so that each time nmh is reinstalled,
+     the right value will be there.
+
+     If you use "smtp", this will enable a direct SMTP (simple mail
+     transport protocol) interface in nmh.  When sending mail, instead
+     of passing the message to the mail transport agent, `post' will
+     open a socket connection to the mail port on the machine specified
+     in the `mts.conf' file (default is localhost), and speak SMTP
+     directly.
+
+     If you use "sendmail/smtp", then `post' will send messages by forking a
+     local copy of sendmail.  Currently it will still speak SMTP with
+     this local copy of sendmail.
+
+     If you use "sendmail/pipe", then `post' will open a pipe to the
+     sendmail program and invoke it with the '-t' and '-i' options
+     and write the message to sendmail's standard input.  Note that
+     some nmh functionality is not available in this mode.
+
+--with-ndbm=LIB    (DEFAULT is to autodetect)
+--with-ndbmheader=HEADER     (DEFAULT is to autodetect)
+     Specify the header file (eg ndbm.h) and library (eg ndbm) to use
+     to compile against the ndbm database library. By default, configure
+     will try various possibilities until it finds one that works; this
+     option only needs to be specified if the autodetection fails or
+     makes the wrong choice.
+
+     If either of these options is given then the other must also be
+     specified.
+
+--with-smtpserver='SMTPSERVER'    (DEFAULT is localhost)
+     If this option is not specified, the mts.conf file will contain
+     the line "servers: localhost", which may be manually edited later.
+     You may find it convenient to specify a value at configure-time,
+     however, so that each time nmh is reinstalled, the right value will be
+     there.
+
+     See mh-tailor(5) for full documentation of "servers:".
+
+--with-cyrus-sasl	(DEFAULT is to autodetect))
+     Enable SASL support for SMTP and POP via the Cyrus SASL library.
+     This is used for the POP AUTH and SMTP AUTH protocols.  This supports
+     a wide variety of security mechanisms, including Kerberos/GSSAPI.
+     Session encryption via SASL is supported for both POP and SMTP
+     (depending on server-side support and the security mechanism in use).
+
+--with-tls		(DEFAULT is to autodetect)
+     Enable TLS session encryption support for SMTP via the STARTTLS command
+     and TLS at connection start for both SMTP and POP.
+
+--with-oauth		(DEFAULT is to enable if curl is installed)
+     Enable OAuth2 authentication for SMTP and POP.
+
+--with-readline		(DEFAULT is to autodetect)
+     Enable support for readline functionality (command history/editing) at
+     the WhatNow? prompt.
+
+--
+The nmh team
+nmh-workers@nongnu.org

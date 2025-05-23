@@ -1,0 +1,116 @@
+#!/bin/sh
+######################################################
+#
+# Test forwarding messages (including RFC-934 mode).
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' forw -
+
+# Make a draft file forwarding two messages.
+mkdraft() {
+    cat > $draft <<EOF
+To:
+cc:
+Fcc: +outbox
+Subject:
+--------
+#forw [forwarded messages] +inbox 1 2
+EOF
+}
+
+draft="$MH_TEST_DIR/$$.draft"
+draftorig="$MH_TEST_DIR/`mhparam sbackup`$$.draft.orig"
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+# check mhbuild
+start_test "mhbuild"
+cat > $expected <<EOF
+To:
+cc:
+Fcc: +outbox
+Subject:
+MIME-Version: 1.0
+Content-Type: multipart/digest; boundary="----- =_aaaaaaaaaa0"
+Content-Description: forwarded messages
+
+------- =_aaaaaaaaaa0
+Content-Type: message/rfc822
+
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+
+This is message number 1
+
+------- =_aaaaaaaaaa0
+Content-Type: message/rfc822
+
+From: Test2 <test2@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 2@test.nmh
+Subject: Testing message 2
+
+This is message number 2
+
+------- =_aaaaaaaaaa0--
+EOF
+mkdraft
+run_prog mhbuild $draft
+check $expected $draft
+test ${failed:-0} -eq 0  &&  rm "$draftorig"
+
+# check mhbuild -rfc934
+start_test "mhbuild -rfc934"
+cat > $expected <<EOF
+To:
+cc:
+Fcc: +outbox
+Subject:
+MIME-Version: 1.0
+Content-Type: multipart/digest; boundary="----- =_aaaaaaaaaa0"
+Content-Description: forwarded messages
+
+
+------- =_aaaaaaaaaa0
+
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+
+This is message number 1
+
+------- =_aaaaaaaaaa0
+
+From: Test2 <test2@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 2@test.nmh
+Subject: Testing message 2
+
+This is message number 2
+
+------- =_aaaaaaaaaa0--
+EOF
+mkdraft
+run_prog mhbuild -rfc934 $draft
+check $expected $draft
+test ${failed:-0} -eq 0  &&  rm "$draftorig"
+
+finish_test
+exit $failed

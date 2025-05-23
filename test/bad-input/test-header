@@ -1,0 +1,125 @@
+#!/bin/sh
+######################################################
+#
+# Test bogus headers (no blank line before body, etc.)
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+expected="$MH_TEST_DIR/$$.expected"
+expected_err="$MH_TEST_DIR/$$.expected_err"
+actual="$MH_TEST_DIR/$$.actual"
+actual_err="$MH_TEST_DIR/$$.actual_err"
+
+# Write message with bogus header field (missing blank line, really).
+msgfile="$MH_TEST_DIR/Mail/inbox/11"
+cat >"$msgfile" <<EOF
+Date: Sun, 18 Dec 2005 00:52:39 +0100
+From: foo@example.edu
+To: bar@example.edu
+Subject: test
+This is a multi-part message in MIME format.
+
+I am a stupid spammer.
+EOF
+
+# check scan
+start_test scan
+cat >"$expected" <<EOF
+  11  12/18 foo@example.edu    test<<This is a multi-part message in MIME format
+EOF
+run_prog scan -width 80 last > "$actual" 2>&1
+check "$expected" "$actual" : scan with bogus header field
+
+# check show (mhl)
+start_test show
+cat >"$expected" <<EOF
+(Message inbox:11)
+
+Date:    Sun, 18 Dec 2005 00:52:39 +0100
+To:      bar@example.edu
+From:    foo@example.edu
+Subject: test
+
+
+This is a multi-part message in MIME format.
+
+I am a stupid spammer.
+EOF
+run_prog show last > "$actual" 2>&1
+check "$expected" "$actual" : "show (mhl) with bogus header field"
+
+# check mhshow
+start_test mhshow
+cat >"$expected" <<EOF
+[ Message inbox:11 ]
+Date:    Sun, 18 Dec 2005 00:52:39 +0100
+To:      bar@example.edu
+From:    foo@example.edu
+Subject: test
+
+
+[ part  - text/plain -   69B  ]
+This is a multi-part message in MIME format.
+
+I am a stupid spammer.
+EOF
+run_prog mhshow last > "$actual" 2>&1
+check "$expected" "$actual" : mhshow with bogus header field
+
+# check m_getfld() handling of empty header field
+start_test 'm_getfld() handling of empty header field'
+msgfile="$MH_TEST_DIR/Mail/inbox/12"
+printf 'Date: Sat, 12 Jan 2013 09:07:01 -0600\nReceived:' >"$msgfile"
+cat >"$expected" <<EOF
+  12  01/12  
+EOF
+cat >"$expected_err" <<EOF
+scan: eof encountered in field "Received"
+??Format error (message 12) in component 2
+EOF
+
+run_prog scan -width 13 last >"$actual" 2>"$actual_err"
+check "$expected" "$actual" : m_getfld, empty header output
+check "$expected_err" "$actual_err" : m_getfld, empty header error
+
+# check m_getfld() handling of excessively long header field name
+start_test 'm_getfld() handling of excessively long header field name'
+msgfile="$MH_TEST_DIR/Mail/inbox/13"
+cat >"$msgfile" <<EOF
+Date: Tue, 15 Jan 2013 21:13:12 -0600
+ThisHeaderFieldNameIsWaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaayTooLong: OK
+EOF
+cat >"$expected" <<EOF
+  13  01/15  
+EOF
+
+run_prog scan -width 13 last >"$actual" 2>"$actual_err"
+check "$expected" "$actual" : m_getfld with excessively long header field name
+# Cygwin has a BUFSIZ of 1024 so the error message gets truncated.
+# Deal with that by grepping to verify that scan showed the proper error.
+verify_string_in_file() {
+  if grep "$1" "$2" >/dev/null; then
+    :
+  else
+    echo "$0: did not receive expected error message \"$1\""
+    failed=`expr ${failed:-0} + 1`
+  fi
+}
+verify_string_in_file 'scan: field name "ThisHeaderFieldNameIsWa' "$actual_err"
+verify_string_in_file 'exceeds 997' "$actual_err"
+verify_string_in_file '??Format error (message 13) in component 2' "$actual_err"
+rm -f "$actual_err"
+
+finish_test
+exit $failed

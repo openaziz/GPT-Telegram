@@ -1,0 +1,257 @@
+.TH MHMAIL %manext1% 2012-07-01 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhmail \- send or read mail non-interactively with nmh
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhmail
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-to ]
+.I addrs
+\&...
+.RB [ \-attach
+.IR file ]
+.RB [ \-body
+.IR text ]
+.RB [ \-cc
+.I addrs
+\&...]
+.RB [ \-from
+.IR addr ]
+.RB [ \-headerfield
+.IR name:value ]
+.RB [ \-subject
+.IR subject ]
+.RB [ \-resent ]
+[switches\ for
+.I post
+\&... |
+.B \-profile
+[switches\ for
+.I send
+\&...]]
+.RB [ \-send " | " \-nosend ]
+.HP 5
+.B mhmail
+with no arguments is equivalent to
+.B inc
+.ad
+.SH DESCRIPTION
+.B mhmail
+is intended as a replacement, compatible with
+.BR nmh ,
+for the standard Berkeley mail program
+.RB ( mail
+or
+.BR mailx ).
+.B nmh
+is intended for the use of programs such as
+.BR cron ,
+which expect to send mail automatically.  It is also used by some
+.B nmh
+commands to mail error notifications.  Although
+.B mhmail
+can be used interactively, it is recommended that
+.B comp
+and
+.B send
+be used instead, to send messages.
+.PP
+When invoked without arguments,
+.B mhmail
+simply invokes
+.B inc
+to incorporate new messages from the user's mail drop.
+.PP
+When one or more addresses are specified, a message is read from the
+standard input and spooled to a temporary file.
+.B mhmail
+then invokes
+by default, with the name of the temporary file as its argument, to
+by default, with the name of the temporary file as its argument to
+deliver the message to the specified address.
+.PP
+The
+.B \-subject
+switch can be used to specify the \*(lqSubject:\*(rq field of the message.
+\*(lqSubject:\*(rq field of the message.
+.PP
+The
+.B \-resent
+switch indicates that the message body is a fully formed message that
+will be resent, as
+.B dist
+would do.  For example:
+.PP
+.RS 5
+.nf
+mhmail u2@example.com -resent <\`mhpath cur\`
+.fi
+.RE
+.PP
+By default,
+.B mhmail
+will read the message to be sent from the standard input.
+You can specify the text of the message at the command
+line with the
+.B \-body
+.I text
+switch.  If the standard input has zero length,
+.B mhmail
+will not send the message and return with status 1.  You can use the switch
+.B \-body
+\*(lq\*(rq to force an empty message.
+.PP
+Normally, addresses appearing as arguments are put in the \*(lqTo:\*(rq
+field.  At least one such address is required when sending a message,
+i.e., if any other switches are supplied.  If the
+.B \-cc
+switch is used, all addresses following it, even if there are
+intervening switches other than
+.BR \-to ,
+are placed in the \*(lqcc:\*(rq field.  The optional
+.B \-to
+switch can appear in front of any addresses to signify their placement
+in the \*(lqTo:\*(rq field.  The
+.B \-to
+and
+.B \-cc
+switches may be given multiple times.
+.PP
+By using
+.B \-from
+.IR addr ,
+you can specify the \*(lqFrom:\*(rq header of the draft.  If no
+.B \-from
+switch is used when sending,
+.B mhmail
+will supply a \*(lqFrom:\*(rq header field using the sender's local mailbox,
+see
+.I localmbox
+in
+.IR mh-format (5).
+Naturally,
+.B post
+will fill in the \*(lqSender:\*(rq header correctly.
+.PP
+The
+.B \-headerfield
+.I name:value
+switch adds a header field with the specified name and value to the
+message.  (The
+.I value
+is called the
+.I field body
+in RFC 2822, but that's too easily confused with the message body.)
+There need not be a space after the colon that separates the
+name and value in the argument to this switch.  It is usually best to
+enclose the argument in quotes to protect it from the shell.  The
+.B \-headerfield
+switch may be given multiple times to add multiple header fields,
+for example,
+.PP
+.RS 5
+.nf
+mhmail -from sender@example.com \\
+-headerfield 'MIME-Version:1.0' \\
+-headerfield 'Content-Type:text/plain; charset=utf-8' \\
+-headerfield 'Content-Transfer-Encoding:8bit' \\
+recipient@example.com
+.fi
+.RE
+.PP
+Note about this example:  the
+.B \-attach
+switch causes
+.I MIME-Version
+and
+.I Content-Type
+headers to be added to the message.
+.PP
+The
+.B \-profile
+switch instructs
+.B mhmail
+to use
+.B send
+instead of
+.B post
+to send the message.  This allows use of the user's context and aliases.
+.PP
+The
+.B \-attach
+.I file
+switch attaches the specified file to the message.  Use of
+.B \-attach
+enables
+.B \-profile
+because
+.B mhmail
+uses
+.B send
+to handle the attachment.  It is usually best to enclose the argument
+in quotes to protect it from the shell.  The
+.B \-attach
+switch may be given multiple times to add multiple attachments.
+.PP
+The
+.B \-nosend
+option shows the draft file that would be posted/sent on the command's
+standard output but does not post or send it.
+.B \-send
+provides the default behavior of posting or sending the message.  It
+can be used to disable
+.BR \-nosend ,
+for example, when using a shell alias.
+.PP
+All other switches are passed to
+.B post
+if
+.B \-profile
+is not used, or
+.B send
+if
+.B \-profile
+is used.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^%bindir%/inc~^Program to incorporate mail drop into folder
+^%nmhlibexecdir%/post~^Program to deliver a message
+^/tmp/mhmail*~^Temporary copy of message
+.fi
+.SH "PROFILE COMPONENTS"
+.B mhmail
+does
+.I not
+consult the user's
+.I \&.mh_profile
+.SH "SEE ALSO"
+.IR dist (1),
+.IR send (1),
+.IR mh-format (5),
+.IR send (1),
+.IR post (8)
+.SH DEFAULTS
+.nf
+.RB ` "\-from localmbox" '
+.RB ` \-profile "' is enabled by default only with " \-attach
+.RB ` \-send '
+.fi
+.SH CONTEXT
+If
+.B inc
+is invoked, then
+.BR inc 's
+context changes occur.  With the
+.B \-profile
+switch, the context of
+.B send
+is used.
+.B mhmail
+does not read the context file itself.

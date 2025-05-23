@@ -1,0 +1,79 @@
+#!/bin/sh
+######################################################
+#
+# Test install-mh
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' install-mh -
+
+# check with no options, with nmh already installed
+start_test "with no options, with nmh already installed"
+run_test "install-mh" \
+    'install-mh: You already have an nmh profile, use an editor to modify it'
+
+# check -auto, with nmh already installed
+start_test "-auto, with nmh already installed"
+run_test "install-mh -auto" 'install-mh: invocation error'
+
+# check -check, with nmh already installed
+start_test "-check, with nmh already installed"
+run_test "install-mh -check" ''
+# make sure exit status is 0
+run_prog install-mh -check
+run_test "echo $?" '0'
+
+# Remove the nmh installation so that install-mh can install.
+rm -rf $MH_TEST_DIR/Mail
+
+# check -check, with nmh not installed
+start_test "-check, with nmh not installed"
+run_test "install-mh -check" ''
+# make sure exit status is 1
+set +e
+run_prog install-mh -check
+run_test "echo $?" '1'
+set -e
+
+# check with no options, with nmh not installed.  Use canned
+start_test "with no options, with nmh not installed.  Use canned"
+# responses to install.
+installpath=`echo $MH_TEST_DIR/Mail | sed 's%^/%%'`
+echo "n
+n
+n
+$installpath
+y" | run_prog install-mh >/dev/null
+
+if [ -f $MH_TEST_DIR/Mail/context  -a  -f "$MH" ]; then
+  run_prog install-mh -check
+else
+  failed=`expr ${failed:-0} + 1`
+fi
+
+# Remove the nmh installation so that install-mh -auto can install.
+# And set HOME to that it installs in the test directory:
+# install-mh -auto does a chdir($HOME).
+rm -rf $MH_TEST_DIR/Mail
+HOME=$MH_TEST_DIR install-mh -auto >/dev/null
+
+if [ -f $MH_TEST_DIR/Mail/context  -a  -f "$MH" ]; then
+  run_prog install-mh -check
+else
+  failed=`expr ${failed:-0} + 1`
+fi
+
+
+finish_test
+exit $failed

@@ -1,0 +1,120 @@
+.TH RCVTTY %manext1% 1999-04-30 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+rcvtty \- report new mail with nmh
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/rcvtty
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ command ]
+.RB [ \-form
+.IR formatfile ]
+.RB [ \-format
+.IR string ]
+.RB [ \-width
+.IR columns ]
+.RB [ \-bell " | " \-nobell ]
+.RB [ \-newline " | " \-nonewline ]
+.RB [ \-biff ]
+.ad
+.SH DESCRIPTION
+The
+.B rcvtty
+command can be used to report new mail.  It is used primarily
+in conjunction with mail filtering agents such as
+.B slocal
+or
+.BR procmail .
+.PP
+.B rcvtty
+executes the named command with the message as its standard input,
+and writes the resulting output on your terminal.
+.PP
+Alternatively, if no command is specified (or the command is bogus), then
+.B rcvtty
+will instead write a one-line scan listing.  The default output format
+of this scan listing may be overridden by using either the
+.B \-form
+.I formatfile
+or
+.B \-format
+.I string
+option, similar to the equivalent options for
+.B scan
+and
+.BR inc .
+See
+.IR mh\-format (5)
+for details.
+.PP
+A newline is output before the message output, and the terminal bell is
+rung after the output.  The
+.B \-nonewline
+and
+.B \-nobell
+switches will inhibit these functions.
+.PP
+The switch
+.B \-width
+.I columns
+may be given to specify the width of the scan line.
+The default is to use the width of the terminal.
+.PP
+In addition to the standard format escapes described in
+.IR mh\-format (5),
+.B rcvtty
+also recognizes the following additional
+.I component
+escapes:
+.PP
+.RS 5
+.nf
+.ta \w'Dtimenow  'u +\w'Returns  'u
+Escape	Returns	Description
+body	string	the (compressed) first part of the body
+dtimenow	date	the current date
+folder	string	the name of the current folder
+.fi
+.RE
+.PP
+By default,
+.B rcvtty
+will send its output to every terminal on the local machine that
+is owned by current user, and that has given write permission
+as granted by the command
+.IR mesg (1).
+If the option
+.B \-biff
+is given, then
+.B rcvtty
+will obey the notification status set by the command
+.IR biff (1)
+instead.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^%nmhetcdir%/mts.conf~^nmh mts configuration file
+^$HOME/.maildelivery~^The file controlling local delivery
+^%nmhetcdir%/maildelivery~^Rather than the standard file
+.fi
+.SH CONTEXT
+None
+.SH DEFAULTS
+.nf
+.RB ` \-width "' defaults to the width of the terminal"
+.RB ` \-newline '
+.RB ` \-bell '
+.fi
+.SH "SEE ALSO"
+.IR mh-format (5),
+.IR rcvdist (1),
+.IR rcvpack (1),
+.IR rcvstore (1),
+.IR slocal (1)
+.SH BUGS
+Only two return codes are meaningful, others should be.

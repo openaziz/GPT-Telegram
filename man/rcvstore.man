@@ -1,0 +1,149 @@
+.TH RCVSTORE %manext1% 2013-02-19 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+rcvstore \- asynchronously incorporate mail into an nmh folder
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/rcvstore
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RB [ \-create " | " \-nocreate ]
+.RB [ \-unseen " | " \-nounseen ]
+.RB [ \-zero " | " \-nozero ]
+.RB [ \-sequence
+.I name
+\&...]
+.RB [ \-public " | " \-nopublic ]
+.ad
+.SH DESCRIPTION
+.B rcvstore
+incorporates a message from the standard input into an
+.B nmh
+folder.  This command is typically used in conjunction with
+mail filtering programs such as
+.B slocal
+and
+.BR procmail ,
+to filter your mail into different folders.
+.PP
+You may specify which folder to use with
+.IR +folder .
+If no folder is specified,
+.B rcvstore
+will use the folder given by a non-empty \*(lqInbox:\*(rq entry in
+the user's profile, else it will use the folder named \*(lqinbox\*(rq.
+.PP
+If the switch
+.B \-create
+is given (it is the default) and if the specified
+(or default) folder does not exist, then it will be created.  You may
+disable this with the
+.B \-nocreate
+option.  In this case
+.B rcvstore
+will exit if the specified folder does not exist.
+.PP
+When the new message is incorporated into the folder, it is assigned
+the next highest number for that folder.
+.PP
+.B rcvstore
+will incorporate anything except zero length messages into the user's
+.B nmh
+folder.  It will not change the message in any way.
+.PP
+If the user's profile contains a
+.RI \*(lq "Msg\-Protect: nnn" \*(rq
+entry, it will be used as the mode to use, in octal, on the newly created
+message, otherwise the
+.B nmh
+default mode of 0600, see
+.IR chmod (1),
+will be used (on filesystems that support it).
+For all subsequent operations on this message, this initially assigned
+mode will be preserved.
+.PP
+If the switch
+.B \-unseen
+is given (it is on by default), and if the profile entry
+\*(lqUnseen\-Sequence\*(rq is present and non-empty, then
+.B rcvstore
+will add the newly incorporated message to each sequence
+named by this profile entry.  You may use the switch
+.B \-nounseen
+to disable this.  These sequences will not be zeroed by
+.B rcvstore
+prior to adding the new message.
+.PP
+Furthermore, the incoming messages may be added to additional sequences
+as they arrive by the use of the
+.B \-sequence
+switch.  As with the commands
+.B pick
+and
+.BR mark ,
+you may also use the switches
+.B \-zero
+and
+.B \-nozero
+to specify whether to zero old sequences or not.
+Similarly, use of the
+.B \-public
+and
+.B \-nopublic
+switches may be used to force these sequences to be public or
+private sequences.
+.SS Locking and sequences
+If you use the \*(lqUnseen-Sequence\*(rq profile entry, or if you
+use the
+.B \-sequence
+argument, 
+.B rcvstore
+might try to update its sequence state while another
+.B nmh
+process is also trying to do so.  This can cause one of those updates
+to be lost.  To avoid this (just between asynchronous invocations of
+.BR rcvstore ),
+always use it with an external locking mechanism.  A
+.IR procmailrc (5)
+local lockfile would work, or if not using procmail, then consider using
+.IR dotlockfile (1)
+or
+.IR flock (1).
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Folder\-Protect:~^To set mode when creating a new folder
+^Inbox:~^To find the default inbox
+^Msg\-Protect:~^To set mode when creating a new message
+^Unseen\-Sequence:~^To name sequences denoting unseen messages
+.fi
+.SH "SEE ALSO"
+.IR mh\-sequence (5),
+.IR procmailex (5),
+.IR procmailrc (5),
+.IR rcvdist (1),
+.IR rcvpack (1),
+.IR rcvtty (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to \*(lqInbox\*(rq profile entry"
+.RB ` \-create '
+.RB ` \-unseen '
+.RB ` \-nozero '
+.fi
+.SH CONTEXT
+No context changes will be attempted, with the exception of
+sequence manipulation.

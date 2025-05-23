@@ -1,0 +1,55 @@
+.TH FMTDUMP %manext8% 1999-04-30 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+fmtdump \- decode nmh's \fImh-format\fP\^(5) files
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/fmtdump
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-form
+.IR formatfile ]
+.RB [ \-format
+.IR string ]
+.ad
+.SH DESCRIPTION
+.B fmtdump
+parses an
+.B nmh
+format file and produces a pseudo-language listing of how
+.B nmh
+interprets the file.  This is useful when debugging a complicated format file.
+.PP
+The
+.B \-format
+.I string
+and
+.B \-form
+.I formatfile
+switches may be
+used to specify a format string or format file to read.
+See
+.IR mh-format (5)
+for details.
+.SH FILES
+.PD 0
+.TP 20
+$HOME/.mh_profile
+The user's profile.
+.TP
+%nmhetcdir%/scan.default
+The default format file.
+.PD
+.SH "PROFILE COMPONENTS"
+.TP 20
+Path:
+To determine the user's nmh directory.
+.SH "SEE ALSO"
+.IR fmttest (1),
+.IR mh-format (5),
+.IR mh-sequences (8)
+.SH CONTEXT
+None

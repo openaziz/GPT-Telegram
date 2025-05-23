@@ -1,0 +1,518 @@
+.TH MHSTORE %manext1% 2015-02-06 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhstore \- store contents of nmh MIME messages into files
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhstore
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-file
+.IR file ]
+.RB [ \-outfile
+.IR outfile ]
+.RB [ \-part
+.IR number ]
+\&...
+.RB [ \-type
+.IR content ]
+\&...
+.RB [ \-prefer
+.IR content ]
+\&...
+.RB [ \-noprefer ]
+.RB [ \-auto " | " \-noauto ]
+.RB [ \-clobber
+.IR always " | " auto " | " suffix " | " ask " | " never ]
+.RB [ \-verbose " | " \-noverbose ]
+.ad
+.SH DESCRIPTION
+The
+.B mhstore
+command allows you to store the contents of a collection of MIME
+(multi-media) messages into files or other messages.
+.PP
+.B mhstore
+manipulates multi-media messages as specified in RFC 2045 to RFC 2049.
+.PP
+By default,
+.B mhstore
+will store all the parts of each message.
+Each part will be stored in a separate file.  The header fields of
+the message are not stored.  By using the
+.BR \-part ,
+.BR \-type ,
+and
+.B \-prefer
+switches, you may limit and reorder the set of parts to be stored,
+based on part number and/or content type.
+.PP
+The
+.B \-file
+.I file
+switch directs
+.B mhstore
+to use the specified file as the source message, rather than a message
+from a folder.  If you specify this file as \*(lq-\*(rq, then
+.B mhstore
+will accept the source message on the standard input.  Note that the
+file, or input from standard input, should be a validly formatted
+message, just like any other
+.B nmh
+message.  It should
+.I not
+be in mail drop format (to convert a file in
+mail drop format to a folder of
+.B nmh
+messages, see
+.IR inc (1)).
+.PP
+A part specification consists of a series of numbers separated by
+dots.  For example, in a multipart content containing three parts,
+these would be named as 1, 2, and 3, respectively.  If part 2 was also
+a multipart content containing two parts, these would be named as 2.1
+and 2.2, respectively.  Note that the
+.B \-part
+switch is effective only for messages containing a multipart content.
+If a message has some other kind of content, or if the part is itself
+another multipart content, the
+.B \-part
+switch will not prevent the content from being acted upon.
+.PP
+The
+.B \-type
+switch can also be used to restrict (or, when used in conjunction with
+.BR \-part ,
+to further restrict) the selection of parts according to content type.
+One or more
+.B \-type
+switches part will only select the first match from a
+multipart/alternative, even if there is more than one
+subpart that matches (one of) the given content type(s).
+.PP
+Using either
+.B \-part
+or
+.B \-type
+switches alone will cause either to select the part(s) they match.
+Using them together will select only the part(s) matched by both
+(sets of) switches.  In other words, the result is the intersection,
+and not the union, of their separate match results.
+.PP
+A content specification consists of a content type and a subtype.
+The initial list of \*(lqstandard\*(rq content types and subtypes can
+be found in RFC 2046.
+.PP
+A list of commonly used contents is briefly reproduced here:
+.PP
+.RS 5
+.nf
+.ta \w'application  'u
+Type	Subtypes
+----	--------
+text	plain, enriched
+multipart	mixed, alternative, digest, parallel
+message	rfc822, external-body
+application	octet-stream, postscript
+image	jpeg, gif, png
+audio	basic
+video	mpeg
+.fi
+.RE
+.PP
+A legal MIME message must contain a subtype specification.
+.PP
+To specify a content, regardless of its subtype, just use the name
+of the content, e.g., \*(lqaudio\*(rq.  To specify a specific
+subtype, separate the two with a slash, e.g., \*(lqaudio/basic\*(rq.
+Note that regardless of the values given to the
+.B \-type
+switch, a multipart content (of any subtype listed above) is always acted
+upon.  Further note that if the
+.B \-type
+switch is used, and it is desirable to act on a message/external-body
+content, then the
+.B \-type
+switch must be used twice: once for message/external-body and once for
+the content externally referenced.
+.PP
+The
+.B \-prefer
+switch will alter the part-ordering of multipart/alternative MIME sections
+in order to override the sender-imposed default ordering.
+The
+.B \-prefer
+switch is functionally most important for
+.BR mhshow ,
+but is also implemented in
+.B mhlist
+and
+.B mhstore
+to make common part-numbering possible across all three programs.
+The last of multiple
+.B \-prefer
+switches will have the highest priority.  This allows the command line
+switches to override profile entries.
+See
+.IR mhlist (1)
+and
+.IR mhshow (1)
+for more information on
+.BR \-prefer .
+.PP
+The
+.B \-noprefer
+switch will cancel any previous
+.B \-prefer
+switches.
+.SS "Storing the Contents"
+.B mhstore
+will store the contents of the named messages in
+\*(lqnative\*(rq (decoded) format.  Two things must be determined:
+the directory in which to store the content, and the filenames.
+Files are written in the directory given by the
+\*(lqnmh-storage\*(rq profile entry, e.g.,
+.PP
+.RS 5
+nmh-storage: /tmp
+.RE
+.PP
+If this entry isn't present, the current working directory is used.
+.PP
+If the
+.B \-outfile
+switch is given, its argument is used for the filename to store all
+of the content, with \*(lq-\*(rq indicating standard output.  If the
+.B \-auto
+switch is given, then
+.B mhstore
+will check if the message contains information indicating the filename
+that should be used to store the content.  This information should be
+specified as the \*(lqfilename\*(rq attribute in the
+\*(lqContent-Disposition\*(rq header or as the \*(lqname\*(rq
+attribute in the \*(lqContent-Type\*(rq header for the content you are
+storing.  For security reasons, this filename will be ignored if it
+begins with the character `/', `.', `|', or `!', or if it contains the
+character `%'.  We also recommend using a \*(lqnmh-storage\*(rq profile
+entry or a
+.B \-clobber
+switch setting other than the default of \*(lqalways\*(rq to avoid
+overwriting existing files.
+.PP
+If the
+.B \-auto
+switch is not given (or is being ignored for security reasons) then
+.B mhstore
+will look in the user's profile for a \*(lqformatting string\*(rq to
+determine how the different contents should be stored.  First,
+.B mhstore
+will look for an entry of the form:
+.PP
+.RS 5
+mhstore-store-<type>/<subtype>
+.RE
+.PP
+to determine the formatting string.  If this isn't found,
+.B mhstore
+will look for an entry of the form:
+.PP
+.RS 5
+mhstore-store-<type>
+.RE
+.PP
+to determine the formatting string.
+.PP
+If the formatting string starts with a \*(lq+\*(rq character, then
+content is stored in the named folder.  A formatting string consisting
+solely of a \*(lq+\*(rq character is interpreted to be the current
+folder.
+.PP
+If the formatting string consists solely of a \*(lq-\*(rq character,
+then the content is sent to the standard output.
+.PP
+If the formatting string starts with a `|', then it represents
+a command for
+.B mhstore
+to execute which should ultimately store the content.
+The content will be passed to the standard input of the command.
+Before the command is executed,
+.B mhstore
+will change to the appropriate directory, and any escapes (given below)
+in the formatting string will be expanded.
+The use of the \*(lq%a\*(rq sequence is not recommended because
+the user has no control over the Content-Type parameter data.
+.PP
+Otherwise, the formatting string will represent a pathname in which
+to store the content.  If the formatting string starts with a `/',
+then the content will be stored in the full path given, else the
+file name will be relative to the value of \*(lqnmh-storage\*(rq or
+the current working directory.  Any escapes (given below) will be
+expanded, except for the a-escape.  Note that if \*(lqnmh-storage\*(rq
+is not an absolute path, it will be relative to the folder that
+contains the message(s).
+.PP
+A command or pathname formatting string may contain the following
+escapes.  If the content isn't part of a multipart (of any subtype
+listed above) content, the p-escapes are ignored.
+.PP
+.RS 5
+.nf
+.ta \w'%P  'u
+%a	Parameters from Content-Type  (only valid with command)
+%m	Insert message number
+%P	Insert part number with leading dot
+%p	Insert part number without leading dot
+%t	Insert content type
+%s	Insert content subtype
+%%	Insert character %
+.fi
+.RE
+.PP
+If no formatting string is found,
+.B mhstore
+will check to see if the content is application/octet-stream with parameter
+\*(lqtype=tar\*(rq.  If so,
+.B mhstore
+will choose an appropriate filename.  If the content is not
+application/octet-stream, then
+.B mhstore
+will check to see if the content is a message.  If so,
+.B mhstore
+will use the value \*(lq+\*(rq.  As a last resort,
+.B mhstore
+will use the value \*(lq%m%P.%s\*(rq.
+.PP
+Example profile entries might be:
+.PP
+.RS 5
+.nf
+mhstore-store-text: %m%P.txt
+mhstore-store-text: +inbox
+mhstore-store-audio/basic: | raw2audio -e ulaw -s 8000 -c 1 > %m%P.au
+mhstore-store-image/jpeg: %m%P.jpg
+mhstore-store-application/PostScript: %m%P.ps
+.fi
+.RE
+.PP
+The
+.B \-verbose
+switch directs
+.B mhstore
+to print out the names of files that it stores.  For backward
+compatibility, it is the default.  The
+.B \-noverbose
+switch suppresses these printouts.
+.SS "Overwriting Existing Files"
+The
+.B \-clobber
+switch controls whether
+.B mhstore
+should overwrite existing files.  The allowed values for this switch
+and corresponding behavior when
+.B mhstore
+encounters an existing file are:
+.PP
+.RS 5
+.nf
+.ta \w'suffix  'u
+always    Overwrite existing file (default)
+auto      Create new file of form name-n.extension
+suffix    Create new file of form name.extension.n
+ask       Prompt the user to specify whether or not to overwrite
+          the existing file
+never     Do not overwrite existing file
+.fi
+.RE
+.PP
+With
+.I auto
+and
+.IR suffix ,
+.I n
+is the lowest unused number, starting from one, in the same form.  If
+a filename does not have an extension (following a `.'), then
+.I auto
+and
+.I suffix
+create a new file of the form
+.I name-n
+and
+.IR name.n ,
+respectively.  With
+.I never
+and
+.IR ask ,
+the exit status of
+.B mhstore
+will be the number of files that were requested but not stored.
+.PP
+With
+.IR ask ,
+if standard input is connected to a terminal, the user is prompted to
+respond
+.IR yes ,
+.IR no ,
+or
+.IR rename ,
+to whether the file should be overwritten.  The responses
+can be abbreviated.  If the user responds with
+.IR rename ,
+then
+.B mhstore
+prompts the user for the name of the new file to be created.  If it is
+a relative path name (does not begin with `/'), then it is relative to
+the current directory.  If it is an absolute or relative path to a
+directory that does not exist, the user will be prompted whether to
+create the directory.  If standard input is not connected to a
+terminal,
+.I ask
+behaves the same as
+.IR always .
+.SS "External Access"
+For contents of type message/external-body,
+\fImhstore\fR supports these access-types:
+.IP \(bu 4
+afs
+.IP \(bu 4
+anon-ftp
+.IP \(bu 4
+ftp
+.IP \(bu 4
+local-file
+.IP \(bu 4
+mail-server
+.IP \(bu 4
+url
+.PP
+For the \*(lqanon-ftp\*(rq and \*(lqftp\*(rq access types,
+.B mhstore
+will look for the \*(lqnmh-access-ftp\*(rq
+profile entry, e.g.,
+.PP
+.RS 5
+nmh-access-ftp: myftp.sh
+.RE
+.PP
+to determine the pathname of a program to perform the FTP retrieval.
+This program is invoked with these arguments:
+.PP
+.RS 5
+.nf
+domain name of FTP-site
+username
+password
+remote directory
+remote filename
+local filename
+\*(lqascii\*(rq or \*(lqbinary\*(rq
+.fi
+.RE
+.PP
+The program should terminate with an exit status of zero if the
+retrieval is successful, and a non-zero exit status otherwise.
+.PP
+For the \*(lqurl\*(rq access types,
+.B mhstore
+will look for the \*(lqnmh-access-url\*(rq profile entry, e.g.,
+.PP
+.RS 5
+nmh-access-url: curl -L
+.RE
+.PP
+to determine the program to use to perform the HTTP retrieval.  This program
+is invoked with one argument: the URL of the content to retrieve.  The program
+should write the content to standard out, and should terminate with a status
+of zero if the retrieval is successful and a non-zero exit status otherwise.
+.SS "User Environment"
+Because the environment in which
+.B mhstore
+operates may vary for different machines,
+.B mhstore
+will look for the environment variable MHSTORE .
+If present, this specifies the name of an additional user profile
+which should be read.  Hence, when a user logs in on a particular
+machine, this environment variable should be set to refer to a
+file containing definitions useful for that machine.  Finally,
+.B mhstore
+will attempt to consult
+.PP
+.RS 5
+%nmhetcdir%/mhn.defaults
+.RE
+.PP
+which is created automatically during
+.B nmh
+installation.
+.PP
+See "Profile Lookup" in
+.IR mh-profile (5)
+for the profile search order, and for how duplicate entries are treated.
+.SH EXAMPLES
+.SS Decoding RFC 2047-encoded file names
+The improper RFC 2047 encoding of file name parameters can be replaced
+with correct RFC 2231 encoding using
+.BR mhfixmsg ,
+either permanently or ephemerally, e.g.,
+.PP
+.RS
+.nf
+mhfixmsg -outfile - | mhstore -auto -clobber ask -file -
+.fi
+.RE
+.PP
+The
+.BI \-clobber ask
+is not necessary, though recommended to avoid silently overwriting an existing
+file.
+.SH FILES
+.B mhstore
+looks for additional profile files in multiple locations: absolute
+pathnames are accessed directly, tilde expansion is done on usernames,
+and files are searched for in the user's
+.I Mail
+directory as specified in their profile.  If not found there, the directory
+.RI \*(lq %nmhetcdir% \*(rq
+is checked.
+.PP
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+^$MHSTORE~^Additional profile entries
+^%nmhetcdir%/mhn.defaults~^System default MIME profile entries
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^nmh-access-ftp:~^Program to retrieve contents via FTP
+^nmh-access-url:~^Program to retrieve contents via HTTP
+^nmh-storage~^Directory to store contents
+^mhstore-store-<type>*~^Template for storing contents
+.fi
+.SH "SEE ALSO"
+.IR mhbuild (1),
+.IR mhfixmsg (1),
+.IR mhlist (1),
+.IR mhshow (1),
+.IR sendfiles (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` msgs "' defaults to cur"
+.RB ` \-noauto '
+.RB ` \-clobber\ always '
+.RB ` \-verbose '
+.SH CONTEXT
+If a folder is given, it will become the current folder.  The last
+message selected will become the current message.
+.SH BUGS
+Partial messages contained within a multipart content are not reassembled.

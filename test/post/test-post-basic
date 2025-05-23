@@ -1,0 +1,209 @@
+#!/bin/sh
+#
+# Test the basic behavior of post
+#
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "${srcdir}/test/post/test-post-common.sh"
+
+check_exit '-eq 1' "$MH_LIBEXEC_DIR/post" -
+
+#
+# Basic test - Simple message, single user, single recipient.  Note that
+# we test dot-stuffing here as well.
+#
+start_test 'simple message'
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+
+This is a test
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<nobody@example.com>
+RCPT TO:<somebody@example.com>
+DATA
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+
+This is a test
+..
+.
+QUIT
+EOF
+
+test_post "${testname}.actual" "${testname}.expected"
+
+#
+# Make sure a draft without a From: is rejected
+#
+start_test 'reject draft without a From:'
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+To: Somebody Else <somebody@example.com>
+Subject: Blank Test
+
+This is a blank test
+EOF
+
+run_test "send -draft -server 127.0.0.1 -port $localport" \
+         "post: message has no From: header
+post: See default components files for examples
+post: re-format message and try again
+send: message not delivered to anyone"
+
+#
+# Make sure that empty Nmh-* header lines are ignored, and that post
+# warns about non-empty ones.
+#
+start_test 'ignore Nmh-* header lines'
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Nmh-Attachment:
+Nmh-Unused: suppress this line
+Subject: Test
+
+This is a test
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<nobody@example.com>
+RCPT TO:<somebody@example.com>
+DATA
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+
+This is a test
+..
+.
+QUIT
+EOF
+
+cat > "${testname}.expected_send_output" <<EOF
+post: ignoring header line -- Nmh-Unused: suppress this line
+EOF
+
+test_post "${testname}.actual" "${testname}.expected" \
+          >${testname}.send_output 2>&1
+
+check "${testname}.send_output" "${testname}.expected_send_output"
+
+#
+# 8-bit without 8BITMIME support
+#
+start_test '8-bit without 8BITMIME support'
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+This is a test
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+RSET
+QUIT
+EOF
+
+cat > "${testname}.err.expected" <<EOF
+post: SMTP server does not support 8BITMIME, not sending.
+Suggest encoding message for 7-bit transport by setting your
+locale to C, and/or specifying *b64 in mhbuild directives.
+post: problem initializing server; [BHST] ready; I'll buy that for a dollar!
+send: message not delivered to anyone
+EOF
+
+set +e
+test_post "${testname}.actual" "${testname}.expected" 2>"${testname}.err"
+set +e
+check "${testname}.err" "${testname}.err.expected"
+
+#
+# 8-bit with 8BITMIME support
+#
+start_test '8-bit with 8BITMIME support'
+# Cheat: SMTPUTF8 enables 8BITMIME in fakestmp
+SMTPUTF8=1; export SMTPUTF8
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<nobody@example.com> BODY=8BITMIME
+RCPT TO:<somebody@example.com>
+DATA
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+Date:
+
+This is a test
+..
+.
+QUIT
+EOF
+test_post "${testname}.actual" "${testname}.expected"
+
+
+#
+# 8-bit with 8BITMIME support, inferred from content
+#
+start_test '8-bit, inferred, with 8BITMIME support'
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This is a test, with a non-ascii character:  §
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<nobody@example.com> BODY=8BITMIME
+RCPT TO:<somebody@example.com>
+DATA
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Date:
+
+This is a test, with a non-ascii character:  §
+..
+.
+QUIT
+EOF
+test_post "${testname}.actual" "${testname}.expected"
+
+
+finish_test
+exit ${failed:-0}

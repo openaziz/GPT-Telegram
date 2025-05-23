@@ -1,0 +1,285 @@
+.TH SHOW %manext1% 2016-03-24 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+show \- display nmh messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B show
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-draft ]
+.RB [ \-showproc
+.IR program ]
+.RB [ \-showmimeproc
+.IR program ]
+.RB [ \-header " | " \-noheader ]
+.RB [ \-checkmime " | " \-nocheckmime ]
+.RB [ \-concat " | " \-noconcat ]
+[switches\ for
+.I showproc
+or
+.IR showmimeproc ]
+.ad
+.SH DESCRIPTION
+.B show
+lists each of the specified messages to the standard output
+(typically, the terminal).
+.PP
+By default, text (non-MIME) messages are filtered and displayed by
+the
+.B nmh
+command
+.BR mhl .
+This command will display text
+messages in a nice, uniform format.  It also allows you to configure
+the format of the displayed messages and which headers fields are
+shown.  See the
+.IR mhl (1)
+manual page for the details about this
+command.  This default can be changed by defining the
+.I showproc
+profile component.  Any switches not recognized by
+.BR show ,
+as well as
+.B \-header
+and
+.BR \-noheader ,
+are
+passed along to that program.  To override the default and the
+.I showproc
+profile component, use the
+.B \-showproc
+.I program
+switch.  For example,
+.B \-showproc
+.I more
+will cause the
+.B more
+program to list the messages with no reformatting.  Normally, this
+program is specified as the
+.I showproc
+in the user's
+.IR \&.mh_profile ,
+rather than using a command line switch.
+.PP
+By default, non-text messages (MIME messages with multi-media
+contents) are processed and displayed by the
+.B nmh
+command
+.BR mhshow .
+See the
+.IR mhshow (1)
+manual page for details
+about this command.  This default can changed by defining the
+.I showmimeproc
+profile component.  Any switches not recognized
+by
+.B show
+are passed along to that program.  To override this
+default and the
+.B showmimeproc
+profile component, use the
+.B \-showmimeproc
+.I program
+switch.
+.PP
+Note that in some cases,
+.B show
+may invoke the
+.I showmimeproc
+even for textual contents.  This will happen for text messages that
+specify a transfer encoding (such as MIME quoted-printable or
+base64) or specify a character set that
+.B show
+doesn't believe
+can be displayed natively.  The appropriate
+.IR locale (1)
+environment variables
+should be set to the terminal's native character set to avoid
+gratuitous invocations of the
+.IR showmimeproc .
+See
+.IR locale (1)
+for details about these environment variables.
+.PP
+The option
+.B \-checkmime
+(set by default) instructs
+.B show
+to
+test if any of the messages to be displayed are non-text (MIME)
+messages.  If any are non-text, they are displayed by the program
+.IR showmimeproc ,
+else they are displayed by the program
+.IR showproc .
+The option
+.B \-nocheckmime
+disables this test and instructs
+.B show
+to use
+.IR showproc ,
+regardless of whether
+any of the messages are non-text (MIME) messages.
+.P
+The
+.B \-noshowproc
+switch will disable any formatting or paging of
+messages.  It is equivalent to
+.B \-nocheckmime
+.B \-showproc
+.IR cat .
+It is still accepted, but should be considered (somewhat) obsolete.
+.PP
+The
+.B \-header
+switch tells
+.B show
+to display a one-line
+description of the message being shown.  This description includes
+the folder and the message number.
+.PP
+By default
+.B show
+will concatenate all content under one pager.  If you want each part to
+displayed separately, you can override the default behavior with
+.B \-noconcat.
+.PP
+If no `msgs' are specified, the current message is used.  Although
+it depends on the specific
+.I showproc
+or
+.IR showmimeproc ,
+in the default setup when more than one message is specified, you
+will be prompted for a <RETURN> prior to listing each message.
+Each message will be listed a page at a time, and when the end of
+page is reached, the program will wait for a <SPACE> or <RETURN>.
+If a <RETURN> is entered, it will print the next line, whereas
+<SPACE> will print the next screenful.
+.PP
+If the standard output is not a terminal, no queries are made, and
+each file is listed with a one-line header and two lines of
+separation.
+.PP
+.RB \*(lq "show \-draft" \*(rq
+will list the file <mh-dir>/draft if it
+exists.
+.PP
+If the profile entry \*(lqUnseen\-Sequence\*(rq is present and
+non-empty, then
+.B show
+will remove each of the messages shown
+from each sequence named by the profile entry.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^Unseen\-Sequence:~^To name sequences denoting unseen messages
+^showproc:~^Program to show text (non-MIME) messages
+^showmimeproc:~^Program to show non-text (MIME) messages
+.fi
+.SH "SEE ALSO"
+.IR mhl (1),
+.IR mhshow (1),
+.IR next (1),
+.IR prev (1),
+.IR scan (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` msgs "' defaults to cur"
+.RB ` \-checkmime '
+.RB ` \-header '
+.RB ` \-concat '
+.fi
+.SH CONTEXT
+If a folder is given, it will become the current folder.  The last
+message selected will become the current message.
+.SH BUGS
+The
+.B \-header
+switch doesn't work when `msgs' expands to more than
+one message.  If the
+.I showproc
+is
+.BR mhl ,
+then this problem can
+be circumvented by referencing the \*(lqmessagename\*(rq field in the
+.B mhl
+format file.
+.PP
+.B show
+updates the user's context before showing the message.
+Hence
+.B show
+will mark messages as seen prior to the user actually
+seeing them.  This is generally not a problem, unless the user relies
+on the \*(lqunseen\*(rq messages mechanism, and interrupts
+.B show
+while it is showing \*(lqunseen\*(rq messages.
+.PP
+If your
+.I showproc
+is
+.B mhl
+(the default), then
+.B show
+uses
+a built-in
+.BR mhl :
+it does not actually run the
+.B mhl
+program.
+Hence, if you define your own
+.BR showproc ,
+don't call it
+.B mhl
+since
+.B show
+won't run it.
+.PP
+If your
+.I showproc
+is the pager
+.BR more ,
+then avoid running
+.B show
+in the background with only its standard output piped to
+another process, as in
+.PP
+.RS 5
+show | imprint &
+.RE
+.PP
+Due to a bug in
+.BR more ,
+show will go into a \*(lqtty input\*(rq state.
+To avoid this problem, re-direct
+.BR show 's
+diagnostic output as well.
+For users of
+.BR csh :
+.PP
+.RS 5
+show |& imprint &
+.RE
+.PP
+For users of
+.BR sh :
+.PP
+.RS 5
+show 2>&1 | imprint &
+.RE

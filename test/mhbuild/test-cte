@@ -1,0 +1,371 @@
+#!/bin/sh
+#########################################################
+#
+# Test the use of explicit Content-Transfer-Encoding tags
+#
+#########################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+set -e
+
+require_locale $en_locales
+
+draft="$MH_TEST_DIR/$$.draft"
+backup="${MH_TEST_DIR}/`mhparam sbackup`$$.draft.orig"
+expected="$MH_TEST_DIR/$$.expected"
+
+#
+# Force some text to be quoted-printable
+#
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *qp
+This is a test of a message with a shørt line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test of a message with a sh=C3=B8rt line.
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+#
+# Force some text to be base64, to test out the encoder.  Try at different
+# line lengths to check out the padding on the routines to convert LF to
+# CR LF.  The current implementation reads in using a 3 byte buffer, so make
+# sure we catch all of those cases.
+#
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a message with a shørt line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtZXNzYWdlIHdpdGggYSBzaMO4cnQgbGluZS4NCg==
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a mëssage with a shørt line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtw6tzc2FnZSB3aXRoIGEgc2jDuHJ0IGxpbmUuDQo=
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a mëssäge with a shørt line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtw6tzc8OkZ2Ugd2l0aCBhIHNow7hydCBsaW5lLg0K
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a message with a shørt line.
+This is a second line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtZXNzYWdlIHdpdGggYSBzaMO4cnQgbGluZS4NClRoaXMgaXMg
+YSBzZWNvbmQgbGluZS4NCg==
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a mëssage with a shørt line.
+This is a second line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtw6tzc2FnZSB3aXRoIGEgc2jDuHJ0IGxpbmUuDQpUaGlzIGlz
+IGEgc2Vjb25kIGxpbmUuDQo=
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a mëssäge with a shørt line.
+This is a second line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtw6tzc8OkZ2Ugd2l0aCBhIHNow7hydCBsaW5lLg0KVGhpcyBp
+cyBhIHNlY29uZCBsaW5lLg0K
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *b64
+This is a test of a mëssäge with a shørt line.
+
+
+This is a second line.
+
+
+
+
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRlc3Qgb2YgYSBtw6tzc8OkZ2Ugd2l0aCBhIHNow7hydCBsaW5lLg0KDQoNClRo
+aXMgaXMgYSBzZWNvbmQgbGluZS4NCg0KDQoNCg0K
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+#
+# Test out some "long" text.  By default it should end up as quoted-printable.
+# But if we request 8bit we should error out if the line is greater than
+# 998.
+#
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+This is a test of a messege with a long line.  This line needs to be longer than 998 to test out the encoding rules.  Will that work?  That's a good question; I don't know if it will or not.  I am the very model of a modern Major-General, I've information vegetable, animal, and mineral, I know the kings of England, and I quote the fights historical From Marathon to Waterloo, in order categorical, I'm very well acquainted, too, with matters mathematical, I understand equations, both the simple and quadratical, About binomial theorem I'm teeming with a lot o' news, With many cheerful facts about the square of the hypotenuse. I'm very good at integral and differential calculus; I know the scientific names of beings animalculous: In short, in matters vegetable, animal, and mineral, I am the very model of a modern Major-General. I know our mythic history, King Arthur's and Sir Caradoc's; I answer hard acrostics, I've a pretty taste for paradox, I quote in elegiacs all the crimes of Heliogabalus, In conics I can floor peculiarities parabolous; I can tell undoubted Raphaels from Gerard Dows and Zoffanies, I know the croaking chorus from The Frogs of Aristophanes!  Then I can hum a fugue of which I've heard the music's din afore, And whistle all the airs from that infernal nonsense Pinafore. 
+
+This is a second line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test of a messege with a long line.  This line needs to be longe=
+r than 998 to test out the encoding rules.  Will that work?  That's a good=
+ question; I don't know if it will or not.  I am the very model of a moder=
+n Major-General, I've information vegetable, animal, and mineral, I know t=
+he kings of England, and I quote the fights historical From Marathon to Wa=
+terloo, in order categorical, I'm very well acquainted, too, with matters =
+mathematical, I understand equations, both the simple and quadratical, Abo=
+ut binomial theorem I'm teeming with a lot o' news, With many cheerful fac=
+ts about the square of the hypotenuse. I'm very good at integral and diffe=
+rential calculus; I know the scientific names of beings animalculous: In s=
+hort, in matters vegetable, animal, and mineral, I am the very model of a =
+modern Major-General. I know our mythic history, King Arthur's and Sir Car=
+adoc's; I answer hard acrostics, I've a pretty taste for paradox, I quote =
+in elegiacs all the crimes of Heliogabalus, In conics I can floor peculiar=
+ities parabolous; I can tell undoubted Raphaels from Gerard Dows and Zoffa=
+nies, I know the croaking chorus from The Frogs of Aristophanes!  Then I c=
+an hum a fugue of which I've heard the music's din afore, And whistle all =
+the airs from that infernal nonsense Pinafore. =
+
+
+This is a second line.
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+This is a test of a messege with a long line.  This line needs to be longer than 998 to test out the encoding rules.  Will that work?  That's a good question; I don't know if it will or not.  I am the very model of a modern Major-General, I've information vegetable, animal, and mineral, I know the kings of England, and I quote the fights historical From Marathon to Waterloo, in order categorical, I'm very well acquainted, too, with matters mathematical, I understand equations, both the simple and quadratical, About binomial theorem I'm teeming with a lot o' news, With many cheerful facts about the square of the hypotenuse. I'm very good at integral and differential calculus; I know the scientific names of beings animalculous: In short, in matters vegetable, animal, and mineral, I am the very model of a modern Major-General. I know our mythic history, King Arthur's and Sir Caradoc's; I answer hard acrostics, I've a pretty taste for paradox, I quote in elegiacs all the crimes of Heliogabalus, In conics I can floor peculiarities parabolous; I can tell undoubted Raphaels from Gerard Dows and Zoffanies, I know the croaking chorus from The Frogs of Aristophanes!  Then I can hum a fugue of which I've heard the music's din afore, And whistle all the airs from that infernal nonsense Pinafore. 
+
+This is a secönd line.
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test of a messege with a long line.  This line needs to be longe=
+r than 998 to test out the encoding rules.  Will that work?  That's a good=
+ question; I don't know if it will or not.  I am the very model of a moder=
+n Major-General, I've information vegetable, animal, and mineral, I know t=
+he kings of England, and I quote the fights historical From Marathon to Wa=
+terloo, in order categorical, I'm very well acquainted, too, with matters =
+mathematical, I understand equations, both the simple and quadratical, Abo=
+ut binomial theorem I'm teeming with a lot o' news, With many cheerful fac=
+ts about the square of the hypotenuse. I'm very good at integral and diffe=
+rential calculus; I know the scientific names of beings animalculous: In s=
+hort, in matters vegetable, animal, and mineral, I am the very model of a =
+modern Major-General. I know our mythic history, King Arthur's and Sir Car=
+adoc's; I answer hard acrostics, I've a pretty taste for paradox, I quote =
+in elegiacs all the crimes of Heliogabalus, In conics I can floor peculiar=
+ities parabolous; I can tell undoubted Raphaels from Gerard Dows and Zoffa=
+nies, I know the croaking chorus from The Frogs of Aristophanes!  Then I c=
+an hum a fugue of which I've heard the music's din afore, And whistle all =
+the airs from that infernal nonsense Pinafore. =
+
+
+This is a sec=C3=B6nd line.
+EOF
+
+run_prog mhbuild "$draft"
+check "$draft" "$expected"
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+#<text/plain *8bit
+This is a test of a messege with a long line.  This line needs to be longer than 998 to test out the encoding rules.  Will that work?  That's a good question; I don't know if it will or not.  I am the very model of a modern Major-General, I've information vegetable, animal, and mineral, I know the kings of England, and I quote the fights historical From Marathon to Waterloo, in order categorical, I'm very well acquainted, too, with matters mathematical, I understand equations, both the simple and quadratical, About binomial theorem I'm teeming with a lot o' news, With many cheerful facts about the square of the hypotenuse. I'm very good at integral and differential calculus; I know the scientific names of beings animalculous: In short, in matters vegetable, animal, and mineral, I am the very model of a modern Major-General. I know our mythic history, King Arthur's and Sir Caradoc's; I answer hard acrostics, I've a pretty taste for paradox, I quote in elegiacs all the crimes of Heliogabalus, In conics I can floor peculiarities parabolous; I can tell undoubted Raphaels from Gerard Dows and Zoffanies, I know the croaking chorus from The Frogs of Aristophanes!  Then I can hum a fugue of which I've heard the music's din afore, And whistle all the airs from that infernal nonsense Pinafore. 
+
+This is a secönd line.
+EOF
+
+set +e
+run_test 'eval mhbuild "$draft" 2>&1' 'mhbuild: Line in content exceeds maximum line limit (998)'
+set -e
+
+#
+# Check to make sure -maxunencoded does what we want.
+#
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+------
+This is the test of a lønger line than the usual limit.  Assuming we set the maxunencded parameter properly, this should end up as 8bit?
+EOF
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+This is the test of a lønger line than the usual limit.  Assuming we set the maxunencded parameter properly, this should end up as 8bit?
+EOF
+
+run_prog mhbuild -maxunencoded 200 "$draft"
+check "$draft" "$expected"
+
+[ ${failed:=0} -eq 0 ]  &&  rm -f ${backup}
+
+exit ${failed:-0}

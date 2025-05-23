@@ -1,0 +1,307 @@
+#! /bin/sh
+#
+# mhmail -- simple mail program
+#
+# This code is Copyright (c) 2012, by the authors of nmh.  See the
+# COPYRIGHT file in the root directory of the nmh distribution for
+# complete copyright information.
+#
+# Emulation of compiled mhmail(1), with these differences:
+# * Adds -send/-nosend, -headerfield, and -attach options.
+# * Adds optional -to switch for recipient addresses.
+# * Supports all post(8) (by default, without -profile) or send(1)
+#   (with -profile) options.
+# * Optionally (with -profile) obeys the users profile, including
+#   AliasFile and send entries.
+# * Instead of silently not sending an empty message, notifies user
+#   "mhmail: empty message not sent, use -body '' to force."
+# * The compiled mhmail dropped a trailing newline from the -body argument.
+# * Drops support for undocumented -queue option.
+
+usage='Usage: mhmail [-t(o)] addrs ... [switches]
+  switches are:
+  -at(tach) file [-at(tach) file] ...
+  -b(ody) text
+  -c(c) addrs ...
+  -f(rom) addr
+  -hea(derfield) name:value [-hea(derfield) name:value] ...
+  -su(bject) text
+  -r(esent)
+  -pr(ofile)
+  -se(nd)
+  -nose(nd)
+  -v(ersion)
+  -hel(p)
+  and all post(8)/send(1) switches
+  mhmail with no arguments is equivalent to inc'
+
+
+#### Find location of a program.  Bourne shell just puts the name in
+#### $0 if it's found from the PATH, so search that if necessary.
+finddir() {
+  case $1 in
+    */*) dirname "$1" ;;
+    *  ) IFS=:
+         for d in $PATH; do
+           [ -f "${d:=.}/$1"  -a  -x "$d/$1" ]  &&  printf %s "$d"  &&  break
+         done ;;
+  esac
+}
+
+help() {
+  printf '%s\n' "$usage"
+  #### Print the nmh intro text.
+  ${nmhbindir}/mhparam -help | sed -n -e '/^$/,$p'
+  exit
+}
+
+#### Convenience function to allow concise code below.
+die() {
+    [ $# -gt 0 ]  &&  printf '%s\n' "$1" >&2
+    exit 1
+}
+
+
+bindir=`finddir $0`
+nmhbindir=`cd "$bindir" && pwd`
+nmhlibexecdir=`$nmhbindir/mhparam libexecdir`
+case `printf 'OK\n' | tail -n 1 2>&1` in
+  OK) tail='tail -n ' ;;
+  *)  tail='tail -' ;;
+esac
+
+
+#### Checks for missing mandatory arguments.
+checkforargs() {
+  if [ $attacharg -eq 1 ]; then
+    die 'mhmail: missing argument to -attach'
+  elif [ $bodyarg -eq 1 ]; then
+    die 'mhmail: missing argument to -body'
+  elif [ $ccarg -eq 1  -a  "$cclist"x = x ]; then
+    die 'mhmail: missing argument to -cc'
+  elif [ $fromarg -eq 1 ]; then
+    die 'mhmail: missing argument to -from'
+  elif [ $headerfieldarg -eq 1 ]; then
+    die 'mhmail: missing argument to -headerfield'
+  elif [ $subjectarg -eq 1 ]; then
+    die 'mhmail: missing argument to -subject'
+  elif [ $toarg -eq 1 ]; then
+    die 'mhmail: missing argument to -to'
+  fi
+}
+
+if [ $# -eq 0 ]; then
+  #### Emulate mhmail for reading mail.
+  exec "$nmhbindir"/inc
+fi
+
+#### Go through all the switches so we can build the draft.
+tolist=                     ## To: addresses
+toarg=0                     ## whether currently handling -to
+attacharg=0                 ## whether currently handling -attach
+attachind=Attach            ## attachment indicator
+body=                       ## contents of the message body
+bodyarg=0                   ## whether currently handling -body
+cclist=                     ## Cc: addresses
+ccarg=0                     ## whether currently handling -cc
+from=                       ## From: contents
+fromarg=0                   ## whether currently handling -from
+headerfieldlist=            ## header fields to be added to draft
+headerfieldarg=0            ## whether currently handling -headerfield
+mhmailswitch=0              ## whether currently handling any mhmail switch
+subject=                    ## Subject: contents
+subjectarg=0                ## whether currently handling -subject
+resent=0                    ## whether resending
+postsendargs=               ## switches to pass on to post or send
+post_send_switch_arg=0      ## whether currently handling a post/send switch
+use_send=0                  ## use post (default) or send (-profile)
+sendsw=1                    ## to send (default) or not to send
+for arg in "$@"; do
+  case $arg in
+    #### Post and send won't accept -f -or -s because they'd be
+    #### ambiguous, so no conflicts with them.  And they don't have
+    #### -b, -c, -r, -t.  For the new switches that compiled mhmail
+    #### didn't have:  let -p indicate mhmail -profile, not send
+    #### -port.  -send masks the send(1) -send switch.  -attach
+    #### masks the send(1) -attach switch.
+    -at|-att|-atta|-attac|-attach)
+       mhmailswitch=1
+       attacharg=1
+       use_send=1
+       ;;
+    -b|-bo|-bod|-body) mhmailswitch=1; bodyarg=1 ;;
+    -c|-cc) mhmailswitch=1; ccarg=1 ;;
+    -f|-fr|-fro|-from) mhmailswitch=1; fromarg=1 ;;
+    -hea|-head|-heade|-header|-headerf|-headerfi|-headerfie|-headerfiel|\
+-headerfield) mhmailswitch=1; headerfieldarg=1 ;;
+    -hel|-help) help ;;
+    -nose|-nosen|-nosend) mhmailswitch=1; sendsw=0 ;;
+    -p|-pr|-pro|-prof|-profi|-profil|-profile) mhmailswitch=1; use_send=1 ;;
+    -resend) die 'mhmail: did you mean -resent instead of -resend?' ;;
+    -r|-re|-res|-rese|-resen|-resent) mhmailswitch=1; resent=1 ;;
+    -se|-sen|-send) mhmailswitch=1; sendsw=1 ;;
+    -su|-sub|-subj|-subje|-subjec|-subject) mhmailswitch=1; subjectarg=1 ;;
+    -t|-to) toarg=1; ccarg=0 ;;
+    -v|-ve|-ver|-vers|-versi|-versio|-version)
+       #### Cheat instead of using autoconf and make to fill in the version.
+       "$nmhbindir"/mhpath -v | sed 's/mhpath/mhmail/'; exit ;;
+    -*) if [ $mhmailswitch -eq 1 ]; then
+          checkforargs
+          mhmailswitch=0
+        fi
+        post_send_switch_arg=1
+        postsendargs="${postsendargs:+$postsendargs }$arg" ;;
+    *) mhmailswitch=0
+       if [ $bodyarg -eq 1 ]; then
+         body="$arg
+"
+         bodyarg=0
+         #### Allow -body "" by using just a newline for the body.
+         [ "$body"x = x ]  &&  body='
+'
+       elif [ $fromarg -eq 1 ]; then
+         from="$arg"
+         fromarg=0
+       elif [ $subjectarg -eq 1 ]; then
+         subject="$arg"
+         subjectarg=0
+       elif [ $attacharg -eq 1 ]; then
+         headerfieldlist="${headerfieldlist:+$headerfieldlist}$attachind: $arg
+"
+         attacharg=0
+       elif [ $headerfieldarg -eq 1 ]; then
+         #### It's not strictly necessary to have one space after
+         #### the : that separates the header field name from the
+         #### body, but do it to avoid surprising someone.
+         #### Solaris sed wants the trailing newline in its input.
+         add=`printf '%s\n' "$arg" | sed -e 's/:/: /' -e 's/:  /: /'`
+         headerfieldlist="${headerfieldlist:+$headerfieldlist}$add
+"
+         headerfieldarg=0
+       elif [ $post_send_switch_arg -eq 1 ]; then
+         postsendargs="${postsendargs:+$postsendargs }$arg"
+       elif [ $ccarg -eq 1 ]; then
+         #### ccarg can only be reset to 0 by -to.
+         cclist="${cclist:+$cclist, }$arg"
+       else
+         #### An address.
+         tolist="${tolist:+$tolist, }$arg"
+         toarg=0
+       fi ;;
+  esac
+done
+
+#### Check for at least one address and -from.
+if [ "$tolist"x = x ]; then
+  die 'Usage: mhmail [-t(o)] addrs ... [switches]'
+fi
+if [ "$from"x = x ]; then
+  from=`${nmhlibexecdir}/ap -format '%(localmbox)' 0`
+fi
+
+#### Check for missing mandatory arguments.
+checkforargs
+
+#### Build header.
+[ $resent -eq 0 ]  &&  prefix=  ||  prefix='Resent-'
+header="${prefix}To: $tolist
+"
+[ "$cclist"x = x ]  ||  header="$header${prefix}Cc: $cclist
+"
+[ "$subject"x = x ]  ||  header="$header${prefix}Subject: $subject
+"
+[ "$from"x = x ]  ||  header="$header${prefix}From: $from
+"
+
+if [ "$headerfieldlist" ]; then
+  header="$header$headerfieldlist"
+fi
+
+#### Set up a file to supply as a draft to post/send.  And set a trap
+#### to remove it.  send moves the file to a backup and can create a
+#### .orig file, so it will remove them, too.
+umask 077
+tmpdir="${MHTMPDIR:-${TMPDIR:-`$nmhbindir/mhpath +`}}"
+tmpfilename=`cd "$tmpdir"  &&  "${nmhlibexecdir}/mkstemp" -p mhmail`
+[ $? -ne 0 ]  &&  die "mhmail: failed to create temporary file in $tmpdir"
+tmpfile="$tmpdir/$tmpfilename"
+backup_char=`"$nmhbindir"/mhparam sbackup`
+tmpfilebackup="$tmpdir/${backup_char}${tmpfilename}*"
+tmpfileresent=
+
+message_file=
+if [ $resent -eq 0 ]; then
+  #### Add blank line after header if not resending.
+  header="$header
+"
+  message_file="$tmpfile"
+elif [ $use_send -eq 0 ]; then
+  postsendargs="${postsendargs:+$postsendargs }-dist"
+  message_file="$tmpfile"
+else
+  #### When resending with send, tmpfile will just contain the
+  #### Resent- header fields.  "$tmpfileresent" will contain
+  #### the message that is being resent.
+  tmpfileresent=`"${nmhlibexecdir}/mkstemp" -d "$tmpdir" -p mhmail-resent`
+  [ $? -ne 0 ]  &&  die "mhmail: failed to create temporary file in $tmpdir"
+  mhdist=1; export mhdist
+  mhaltmsg=$tmpfileresent; export mhaltmsg
+  message_file="$tmpfileresent"
+  printf '' >"$message_file"  || exit 2
+fi
+
+trap "rm -f '$tmpfile' $tmpfilebackup ${tmpfileresent:+'$tmpfileresent'}" 0
+
+if [ "$body"x = x ]; then
+  #### First put message header in the file.
+  printf %s "$header" >"$tmpfile" || exit 2
+
+  tmpfile_size_before=`wc -c "$message_file"`
+  #### Now grab the body from stdin.  cat >> handles blank lines
+  #### better than body=`cat`.
+  cat >>"$message_file" || exit 2
+  tmpfile_size_after=`wc -c "$message_file"`
+
+  #### Don't allow an empty body (from stdin).  Use string
+  #### comparison so we don't have to strip the filename, etc.
+  if [ "$tmpfile_size_before" = "$tmpfile_size_after" ]; then
+    die 'mhmail: empty message not sent, use -body '"''"' to force.'
+  fi
+
+  #### Add trailing newline to body if it doesn't have one.
+  if [ `${tail}1 "$message_file" | wc -l` -ne 1 ]; then
+    printf '\n' >>"$message_file" || exit 2
+  fi
+else
+  #### Add trailing newline to body if it doesn't have one.
+  [ `printf %s "$body" | ${tail}1 | wc -l` -ne 1 ]  &&  body="$body
+"
+
+  if [ "$tmpfileresent" ]; then
+    #### Put just the new message header in the file.
+    printf %s "$header" >"$tmpfile" || exit 2
+    #### and the body in the file to resend.
+    printf %s "$body" >"$tmpfileresent" || exit 2
+  else
+    #### Put message header and body in the file.
+    printf %s "$header$body" >"$tmpfile" || exit 2
+  fi
+fi
+
+if [ $sendsw -eq 0 ]; then
+  cat "$tmpfile"
+else
+  if [ $use_send -eq 0 ]; then
+    post_or_send=`$nmhbindir/mhparam postproc`
+  else
+    post_or_send="$nmhbindir/send"
+  fi
+
+  if "$post_or_send" $postsendargs "$tmpfile"; then
+    exit
+  fi
+  status=$?
+  mv -f "$tmpfile" dead.letter
+  printf 'Letter saved in dead.letter\n' >&2
+  exit $status
+fi

@@ -1,0 +1,225 @@
+#!/bin/sh
+######################################################
+#
+# Basic mhbuild tests.
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+expected="$MH_TEST_DIR/test-mhbuild$$.expected"
+
+start_test "-nodirectives"
+cat >"$expected" <<'EOF'
+Subject: test -nodirectives
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+#define line begins with # and ends with backslash-newline \
+        all characters should be preserved
+EOF
+
+cat >"`mhpath new`" <<'EOF'
+Subject: test -nodirectives
+--------
+#define line begins with # and ends with backslash-newline \
+        all characters should be preserved
+EOF
+
+run_test "mhbuild -nodirectives `mhpath last`"
+check "`mhpath last`" "$expected"
+
+start_test "Checking for MIME-Version handling in draft"
+
+cat > "`mhpath new`" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+run_test "mhbuild `mhpath last`" "mhbuild: draft shouldn't contain MIME-Version: field"
+check "`mhpath last`" "$expected" 'keep first'
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+run_test "mhbuild -auto `mhpath last`"
+check "`mhpath last`" "$expected"
+
+start_test "Checking for arbitrary Content header handling in draft"
+
+cat > "`mhpath new`" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+--------
+This is a test
+EOF
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+--------
+This is a test
+EOF
+
+run_test "mhbuild `mhpath last`" "mhbuild: draft shouldn't contain Content-Fart: field"
+check "`mhpath last`" "$expected" 'keep first'
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+--------
+This is a test
+EOF
+
+run_test "mhbuild -auto `mhpath last`" "mhbuild: draft shouldn't contain Content-Fart: field"
+check "`mhpath last`" "$expected"
+
+start_test "Checking for out-of-order Content header handling in draft"
+
+cat > "`mhpath new`" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+run_test "mhbuild `mhpath last`" "mhbuild: draft shouldn't contain MIME-Version: field"
+check "`mhpath last`" "$expected" 'keep first'
+
+cat >"$expected" <<'EOF'
+From: Somebody <somebody@example.com>
+To: Nobody <nobody@example.com>
+Subject: Test message
+Content-Fart: nothing
+MIME-Version: 1.0
+--------
+This is a test
+EOF
+
+run_test "mhbuild -auto `mhpath last`"
+check "`mhpath last`" "$expected"
+
+start_test 'Checking parsing of explicit content-type'
+
+f="`mhpath new`"
+cat >"$f" <<\E
+Subject: Test message.
+
+#<text/troff
+.sp |4i
+.ce
+Render \fBme\fP!
+E
+
+cat >"$expected" <<\E
+Subject: Test message.
+MIME-Version: 1.0
+Content-Type: text/troff; charset="us-ascii"
+
+.sp |4i
+.ce
+Render \fBme\fP!
+E
+
+run_test "mhbuild $f"
+
+check "$f" "$expected"
+
+start_test "Checking parsing of missing content-type's type"
+
+f="`mhpath new`"
+cat >"$f" <<\E
+Subject: Test message.
+
+#<
+Fail.
+E
+
+cat >"$expected" <"$f" # Unaltered.
+
+run_test "mhbuild $f" \
+    "mhbuild: invalid Content-Type: field in message $f (empty type)"
+
+check "$f" "$expected"
+
+start_test "Checking parsing of missing content-type's slash"
+
+f="`mhpath new`"
+cat >"$f" <<\E
+Subject: Test message.
+
+#<foo
+Fail.
+E
+
+cat >"$expected" <"$f" # Unaltered.
+
+run_test "mhbuild $f" \
+    "mhbuild: invalid content-type in message $f (missing slash after \"foo\")"
+
+check "$f" "$expected"
+
+start_test "Checking parsing of missing content-type's subtype"
+
+f="`mhpath new`"
+cat >"$f" <<\E
+Subject: Test message.
+
+#<foo/
+Fail.
+E
+
+cat >"$expected" <"$f" # Unaltered.
+
+run_test "mhbuild $f" \
+    "mhbuild: invalid Content-Type: field in message $f (empty subtype for \"foo\")"
+
+check "$f" "$expected"
+
+finish_test
+exit $failed

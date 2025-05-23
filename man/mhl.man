@@ -1,0 +1,390 @@
+.TH MHL %manext1% 2014-09-15 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhl \- produce formatted listings of nmh messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/mhl
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-bell " | " \-nobell ]
+.RB [ \-clear " | " \-noclear ]
+.RB [ \-folder
+.IR +folder ]
+.RB [ \-form
+.IR formfile ]
+.RB [ \-length
+.IR lines ]
+.RB [ \-width
+.IR columns ]
+.RB [ \-moreproc
+.IR program ]
+.RB [ \-nomoreproc ]
+.RB [ \-fmtproc
+.IR program ]
+.RB [ \-nofmtproc ]
+.RI [ files
+.IR \&... ]
+.ad
+.SH DESCRIPTION
+.B mhl
+is an
+.B nmh
+command for filtering and/or displaying text messages.
+It is the default method of displaying text messages for
+.B nmh
+(it is the default
+.IR showproc ).
+.PP
+As with
+.BR more ,
+each of the messages specified as arguments (or the standard input) will be
+output.  If more than one message file is specified, the user will be
+prompted prior to each one, and a <RETURN> or <EOT> will begin the output,
+with <RETURN> clearing the screen (if appropriate), and <EOT> (usually
+CTRL-D) suppressing the screen clear.  An <INTERRUPT> (usually CTRL-C) will
+abort the current message output, prompting for the next message (if there
+is one), and a <QUIT> (usually CTRL-\) will terminate the program (without
+core dump).
+.PP
+The
+.B \-bell
+option tells
+.B mhl
+to ring the terminal's bell at the end of each page, while the
+.B \-clear
+option tells
+.B mhl
+to clear the screen at the end of each page (or output a formfeed after
+each message).  Both of these switches (and their inverse counterparts)
+take effect only if the profile entry
+.I moreproc
+is defined but empty, and
+.B mhl
+is outputting to a terminal.  If the
+.I moreproc
+entry is defined and non-empty, and
+.B mhl
+is outputting to a terminal, then
+.B mhl
+will cause the
+.I moreproc
+to be placed between the terminal and
+.B mhl
+and the switches are ignored.  Furthermore, if the
+.B \-clear
+switch is
+used and
+.IR mhl 's
+output is directed to a terminal, then
+.B mhl
+will consult the TERM and TERMCAP environment variables to determine
+the user's terminal type in order to find out how to clear the screen.
+If the
+.B \-clear
+switch is given and
+.BR mhl 's
+output is not directed to a terminal (e.g., a pipe or a file), then
+.B mhl
+will send a formfeed after each message.
+.PP
+To override the default
+.I moreproc
+and the profile entry, use the
+.B \-moreproc
+.I program
+switch.  Note that
+.B mhl
+will never start a
+.I moreproc
+if invoked on a hardcopy terminal.
+.PP
+The
+.B \-length
+.I length
+and
+.B \-width
+.I width
+switches set the screen length and width, respectively.
+These default to the values indicated by TERMCAP, if appropriate, otherwise
+they default to 40 and 80, respectively.
+.PP
+The default format file used by
+.B mhl
+is called
+.RI \*(lq mhl.format \*(rq.
+.B mhl
+will first search for this file in the user's
+.B nmh
+directory, and will then search in the directory
+.IR %nmhetcdir% .
+This default can be changed by using the
+.B \-form
+.I formatfile
+switch.
+.PP
+Finally, the
+.B \-folder
+.I +folder
+switch sets the
+.B nmh
+folder name, which is used for the \*(lqmessagename:\*(rq field described below.
+The environment variable
+.B $mhfolder
+is consulted for the default value, which
+.BR next ,
+.BR show ,
+and
+.B prev
+initialize appropriately.
+.PP
+.B mhl
+operates in two phases: 1) read and parse the format file, and
+2) process each message (file).  During phase 1, an internal description
+of the format is produced as a structured list.  In phase 2, this list
+is walked for each message, outputting message information under the
+format constraints from the format file.
+.PP
+The format file can contain information controlling screen clearing,
+screen size, wrap-around control, transparent text, component ordering,
+and component formatting.  Also, a list of components to ignore may be
+specified, and a couple of \*(lqspecial\*(rq components are defined
+to provide added functionality.  Message output will be in the order
+specified by the order in the format file.
+.PP
+Each line of a format file has one of the following forms:
+.PP
+.RS 5
+.nf
+;comment
+:cleartext
+variable[,variable...]
+component:[variable,...]
+.fi
+.RE
+.IP \(bu 4
+A line beginning with a `;' is a comment, and is ignored.
+.IP \(bu 4
+A line beginning with a `:' is clear text, and is output exactly as is.
+.IP \(bu 4
+A line containing only a `:' produces a blank line in the output.
+.IP \(bu 4
+A line beginning with \*(lqcomponent:\*(rq defines the format for the specified
+component,
+.IP \(bu 4
+Remaining lines define the global environment.
+.PP
+For example, the line:
+.PP
+.RS 5
+width=80,length=40,clearscreen,overflowtext="***",overflowoffset=5
+.RE
+.PP
+defines the screen size to be 80 columns by 40 rows, specifies that the
+screen should be cleared prior to each page, that the overflow indentation
+is 5, and that overflow text should be flagged with \*(lq***\*(rq.
+.PP
+Following are all of the current variables and their arguments.  If they
+follow a component, they apply only to that component, otherwise, their
+affect is global.  Since the whole format is parsed before any output
+processing, the last global switch setting for a variable applies to
+the whole message if that variable is used in a global context (i.e.,
+bell, clearscreen, width, length).
+.PP
+.RS 5
+.nf
+.ta \w'noclearscreen  'u +\w'integer/G  'u
+.I "variable	type	semantics"
+width	integer	screen width or component width
+length	integer	screen length or component length
+offset	integer	positions to indent \*(lqcomponent: \*(rq
+overflowtext	string	text to use at the beginning of an
+		overflow line
+overflowoffset	integer	positions to indent overflow lines
+compwidth	integer	positions to indent component text
+		after the first line is output
+uppercase	flag	output text of this component in all
+		upper case
+nouppercase	flag	don't uppercase
+clearscreen	flag/G	clear the screen prior to each page
+noclearscreen	flag/G	don't clearscreen
+bell	flag/G	ring the bell at the end of each page
+nobell	flag/G	don't bell
+component	string/L	name to use instead of \*(lqcomponent\*(rq for
+		this component
+nocomponent	flag	don't output \*(lqcomponent: \*(rq for this
+		component
+center	flag	center component on line (works for
+		one-line components only)
+nocenter	flag	don't center
+leftadjust	flag	strip off leading whitespace on each
+		line of text
+noleftadjust	flag	don't leftadjust
+rtrim	flag	trim whitespace at end of text lines
+nortrim	flag	retain whitespace at end of text
+		lines (default)
+compress	flag	change newlines in text to spaces
+nocompress	flag	don't compress
+wrap	flag	Wrap lines that exceed width (default)
+nowrap	flag	Do not perform line wrapping
+split	flag	don't combine multiple fields into
+		a single field
+nosplit	flag	combine multiple fields into
+		a single field
+newline	flag	print newline at end of components
+		(this is the default)
+nonewline	flag	don't print newline at end of components
+formatfield	string	format string for this component
+		(see below)
+decode	flag	decode text as RFC 2047 encoded
+		header field
+addrfield	flag	field contains addresses
+datefield	flag	field contains dates
+format	flag	Run component through formatproc filter
+		(body only)
+noformat	flag	Do not run component through
+		formatproc filter (default)
+formatarg	string	Argument to format filter
+.fi
+.RE
+.PP
+To specify the value of integer-valued and string-valued variables,
+follow their name with an equals-sign and the value.  Integer-valued
+variables are given decimal values, while string-valued variables
+are given arbitrary text bracketed by double-quotes.  If a value is
+suffixed by \*(lq/G\*(rq or \*(lq/L\*(rq, then its value is useful in
+a global-only or local-only context (respectively).
+.PP
+A line of the form:
+.PP
+.RS 5
+ignores=component,...
+.RE
+.PP
+specifies a list of components which are never output.
+.PP
+The component \*(lqMessageName\*(rq (case-insensitive) will output the
+actual message name (file name) preceded by the folder name if one is
+specified or found in the environment.  The format is identical to that
+produced by the
+.B \-header
+option to
+.BR show .
+.PP
+The component \*(lqExtras\*(rq will output all of the components of the
+message which were not matched by explicit components, or included in
+the ignore list.  If this component is not specified, an ignore list is
+not needed since all non-specified components will be ignored.
+.PP
+If \*(lqnocomponent\*(rq is
+.I not
+specified, then the component name will
+be output as it appears in the format file.
+.PP
+The default format file is:
+.PP
+.RS 5
+.nf
+%mhl_format%
+.fi
+.RE
+.PP
+The variable \*(lqformatfield\*(rq specifies a format string (see
+.IR mh\-format (5)).
+The flag variables \*(lqaddrfield\*(rq and \*(lqdatefield\*(rq
+(which are mutually exclusive), tell
+.B mhl
+to interpret the escapes in the format string as either addresses or
+dates, respectively.
+.PP
+By default,
+.B mhl
+does not apply any formatting string to fields containing address or dates
+(see
+.IR mh\-mail (5)
+for a list of these
+fields).  Note that this results in faster operation since
+.B mhl
+must parse both addresses and dates in order to apply a format string
+to them.  If desired,
+.B mhl
+can be given a default format string for either address or date fields
+(but not both).  To do this, on a global line specify: either the flag
+addrfield or datefield, along with the appropriate formatfield variable string.
+.PP
+The \*(lqformat\*(rq flag specifies that this component will be run through
+the filter program specified by the
+.I formatproc
+profile entry.  This filter program is expected to read data on standard
+input and output data on standard output.  Currently the \*(lqformat\*(rq
+flag is only supported for the \*(lqbody\*(rq component.  The component
+name will be prefixed to the output
+.I after
+the filter has been run.  The expected use of this is to filter a message
+body to create more pleasing text to use in a reply message.
+A suggested filter to use for
+.IR repl (1)
+is as follows:
+.PP
+.RS 5
+body:component=">",overflowtext=">",overflowoffset=0,format,nowrap
+.RE
+.PP
+The
+.B \-fmtproc
+and
+.B \-nofmtproc
+switches can be used to override the
+.I formatproc
+profile entry.
+.PP
+The
+.I formatarg
+option specifies a string that is used as an argument to the format filter.
+This string is processed by
+.IR mh\-format (5)
+and all of the message components are available for use.  Multiple
+.I formatarg
+options can be used to build up multiple arguments to the format filter.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^%nmhetcdir%/mhl.format~^The message template
+^or <mh-dir>/mhl.format~^Rather than the standard template
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^moreproc:~^Program to use as interactive front-end
+^formatproc:~^Program to use as a filter for components that
+^^have the \*(lqformat\*(rq flag set.
+.fi
+.SH "SEE ALSO"
+.IR show (1),
+.IR ap (8),
+.IR dp (8)
+.SH DEFAULTS
+.nf
+.RB ` \-bell '
+.RB ` \-noclear '
+.RB ` \-length\ 40 '
+.RB ` \-width\ 80 '
+.fi
+.SH CONTEXT
+None
+.SH BUGS
+There should be some way to pass `bell' and `clear' information to the
+front-end.
+.PP
+The \*(lqnonewline\*(rq option interacts badly with \*(lqcompress\*(rq
+and \*(lqsplit\*(rq.
+.PP
+The \*(lqformat\*(rq option really should work on something other than the body
+component.

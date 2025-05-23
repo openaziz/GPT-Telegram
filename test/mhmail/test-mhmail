@@ -1,0 +1,866 @@
+#!/bin/sh
+######################################################
+#
+# Test mhmail
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "${srcdir}/test/post/test-post-common.sh"
+
+# Find MIME type string, using configured procs if available.
+MIMETYPEPROC=`mhparam mimetypeproc`
+MIMEENCODINGPROC=`mhparam mimeencodingproc`
+content_type_string() {
+  if test -z "$MIMETYPEPROC"  -o  -z "$MIMEENCODINGPROC"; then
+    #### This should be the order of name and charset.
+    echo "text/plain; name=\"`basename $1`\"; charset=\"us-ascii\""
+  else
+    #### Excise any leading filename followed by : and whitespace.
+    printf '%s; charset="%s"; name="%s"' \
+      `$MIMETYPEPROC $1 | sed -e 's/.*: *//'` \
+      `$MIMEENCODINGPROC $1 | sed -e 's/.*: *//'` `basename $1`
+  fi
+}
+
+# Customize test_post () for use with mhmail.
+# $1 is expected output file, provided by caller
+# $2 is mhmail switches, except for -body
+# $3 of -b signifies use -body switch, | signifies provide body on stdin
+# $4 contains the message body.
+test_mhmail ()
+{
+    pid=`"${MH_OBJ_DIR}/test/fakesmtp" "$actual" $localport`
+
+    if [ $3 = '|' ]; then
+	printf '%s' "$4" | mhmail recipient@example.com $2 \
+			-server 127.0.0.1 -port $localport
+    else
+	mhmail recipient@example.com $2 -body "$4" \
+             -server 127.0.0.1 -port $localport
+    fi
+
+    #
+    # It's hard to calculate the exact Date: header post is going to
+    # use, so we'll just use sed to remove the actual date so we can easily
+    # compare it against our "correct" output.  And same for
+    # Message-ID.
+    #
+
+    sed -e 's/^Date:.*/Date:/' \
+        -e 's/^Resent-Date:.*/Resent-Date:/' \
+        -e 's/^Message-ID:.*/Message-ID:/' "$actual" > "$actual".nodate
+    rm -f "$actual"
+
+    check "$actual".nodate "$1"
+}
+
+expected=$MH_TEST_DIR/test-mhmail$$.expected
+expected_err=$MH_TEST_DIR/test-mhmail$$.expected_err
+actual=$MH_TEST_DIR/test-mhmail$$.actual
+actual_err=$MH_TEST_DIR/test-mhmail$$.actual_err
+
+
+# check -help
+start_test "-help"
+# Verified behavior consistent with compiled sendmail.
+cat >$expected <<EOF
+Usage: mhmail [-t(o)] addrs ... [switches]
+  switches are:
+  -at(tach) file [-at(tach) file] ...
+  -b(ody) text
+  -c(c) addrs ...
+  -f(rom) addr
+  -hea(derfield) name:value [-hea(derfield) name:value] ...
+  -su(bject) text
+  -r(esent)
+  -pr(ofile)
+  -se(nd)
+  -nose(nd)
+  -v(ersion)
+  -hel(p)
+  and all post(8)/send(1) switches
+  mhmail with no arguments is equivalent to inc
+EOF
+
+#### Skip nmh intro text.
+mhmail -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+
+# check -version
+start_test "-version"
+# Verified same behavior as compiled mhmail.
+case `mhmail -v` in
+  mhmail\ --*) ;;
+  *          ) printf '%s: mhmail -v generated unexpected output\n' "$0" >&2
+               failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check for missing argument to switches that require them
+start_test "for missing argument to switches that require them"
+for switch in attach body cc from headerfield subject to; do
+  run_test "mhmail recipient -$switch" \
+           "mhmail: missing argument to -$switch"
+done
+for switch in attach body cc from headerfield subject to; do
+  run_test "mhmail recipient -$switch -nosend" \
+           "mhmail: missing argument to -$switch"
+done
+for switch in attach body cc from headerfield subject to; do
+  run_test "mhmail recipient -$switch -server 127.0.0.1" \
+           "mhmail: missing argument to -$switch"
+done
+
+
+# check with no switches
+start_test "with no switches"
+# That will just run inc, which we don't want to do anything,
+# so tell inc to just display its version.
+# Verified same behavior as compiled mhmail.
+printf 'inc: -version\n' >> $MH
+case `mhmail` in
+  inc\ --*) ;;
+  *           ) echo "$0: mhmail generated unexpected output" >&2
+                failed=`expr ${failed:-0} + 1`;;
+esac
+
+
+# check -nosend
+start_test "-nosend"
+# Not supported by compiled mhmail.
+mhmail -nosend recipient@example.com -from sender1@localhost \
+  -server 127.0.0.1 -port $localport -body '' >"$actual" 2>"$actual_err"
+
+cat > "$expected" <<EOF
+To: recipient@example.com
+From: sender1@localhost
+
+
+EOF
+
+cat > "$expected_err" <<EOF
+EOF
+
+check "$expected" "$actual"
+check "$expected_err" "$actual_err"
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -send
+start_test "-send"
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender2@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender2@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" "-from sender2@localhost -nosend -send" '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from
+start_test "-from"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender3@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender3@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" "-from sender3@localhost" '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from and -body
+start_test "-from and -body"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender4@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender4@localhost
+Date:
+
+body
+.
+QUIT
+EOF
+
+test_mhmail "$expected" "-from sender4@localhost" -b body
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from and -cc
+start_test "-from and -cc"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender5@localhost>
+RCPT TO:<recipient@example.com>
+RCPT TO:<recipient2@example.com>
+DATA
+To: recipient@example.com
+Cc: recipient2@example.com
+From: sender5@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+    "-from sender5@localhost -cc recipient2@example.com" '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from and multiple -cc addresses
+start_test "-from and multiple -cc addresses"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender6@localhost>
+RCPT TO:<recipient@example.com>
+RCPT TO:<recipient2@example.com>
+RCPT TO:<recipient3@example.com>
+RCPT TO:<recipient4@example.com>
+DATA
+To: recipient@example.com
+Cc: recipient2@example.com, recipient3@example.com,
+    recipient4@example.com
+From: sender6@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+    '-from sender6@localhost -cc recipient2@example.com '\
+'recipient3@example.com recipient4@example.com' '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from and -subject
+start_test "-from and -subject"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender7@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+Subject: Test
+From: sender7@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender7@localhost -subject Test' '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -from and -profile
+start_test "-from and -profile"
+# Show that -profile causes mhmail to 1) read the profile and
+# 2) use send(1) by added a send switch to the profile and
+# verifying that it gets used.
+# Not supported by compiled mhmail.
+printf 'send: -msgid\n' >> $MH
+
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender8@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender8@localhost
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+Message-ID:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender8@localhost -profile' '|' message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check repeated -from and -subject switches
+start_test "repeated -from and -subject switches"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender9@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+Subject: Subject2
+From: sender9@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender9@localhost -from sender9@localhost '\
+'-subject Subject1 -subject Subject2' -b message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+# check repeated -body switches
+start_test "repeated -body switches"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender10@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender10@localhost
+Date:
+
+body2
+.
+QUIT
+EOF
+
+test_mhmail "$expected" "-from sender10@localhost -body body1" -b body2
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check multiple -cc switches
+start_test "multiple -cc switches"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender11@localhost>
+RCPT TO:<recipient@example.com>
+RCPT TO:<cc1@example.com>
+RCPT TO:<cc2@example.com>
+DATA
+To: recipient@example.com
+Cc: cc1@example.com, cc2@example.com
+From: sender11@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  '-from sender11@localhost -cc cc1@example.com -cc cc2@example.com' -b message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check separated -cc arguments
+start_test "separated -cc arguments"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender12@localhost>
+RCPT TO:<recipient@example.com>
+RCPT TO:<cc1@example.com>
+RCPT TO:<cc2@example.com>
+DATA
+To: recipient@example.com
+Cc: cc1@example.com, cc2@example.com
+Subject: Test
+From: sender12@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  '-from sender12@localhost -cc cc1@example.com -subject '\
+'Test cc2@example.com' -b message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -cc switch followed by -to switch
+start_test "-cc switch followed by -to switch"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender13@localhost>
+RCPT TO:<recipient@example.com>
+RCPT TO:<recipient2@example.com>
+RCPT TO:<cc1@example.com>
+DATA
+To: recipient@example.com, recipient2@example.com
+Cc: cc1@example.com
+Subject: Test
+From: sender13@localhost
+Date:
+
+message
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  "-from sender13@localhost -cc cc1@example.com -subject Test \
+   -to recipient2@example.com" \
+  -b message
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with no newline on stdin
+start_test "with no newline on stdin"
+# Shows different behavior than compiled mhmail, which was silent in this case.
+cat > "$expected" <<EOF
+EOF
+
+cat > "$expected_err" <<EOF
+mhmail: empty message not sent, use -body '' to force.
+EOF
+
+set +e
+printf '' | mhmail recipient@example.com -server 127.0.0.1 -port $localport \
+  >"$actual" 2>"$actual_err"
+set -e
+
+check "$expected" "$actual"
+check "$expected_err" "$actual_err"
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with one newline on stdin
+start_test "with one newline on stdin"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender14@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender14@localhost
+Date:
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender14@localhost' '|' '
+'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with multiple newlines on stdin
+start_test "with multiple newlines on stdin"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender15@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender15@localhost
+Date:
+
+
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender15@localhost' '|' '
+
+
+'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with text and no trailing newline on stdin
+start_test "with text and no trailing newline on stdin"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender16@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender16@localhost
+Date:
+
+no newline in input
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender16@localhost' '|' 'no newline in input'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with text and multiple trailing blank lines on stdin
+start_test "with text and multiple trailing blank lines on stdin"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender17@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender17@localhost
+Date:
+
+here's some text
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender17@localhost' '|' "here's some text
+
+
+"
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with no newline to -body
+start_test "with no newline to -body"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender18@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender18@localhost
+Date:
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender18@localhost' -b ''
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with one newline to -body
+start_test "with one newline to -body"
+# Shows different behavior than compiled mhmail, which suppressed the newline.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender19@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender19@localhost
+Date:
+
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender19@localhost' -b '
+'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with multiple newlines to -body
+start_test "with multiple newlines to -body"
+# Shows different behavior than compiled mhmail, which suppressed one
+#   of the newlines.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender20@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender20@localhost
+Date:
+
+
+
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender20@localhost' -b '
+
+
+'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with text and no trailing newline to -body
+start_test "with text and no trailing newline to -body"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender21@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender21@localhost
+Date:
+
+no newline in input
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender21@localhost' -b 'no newline in input'
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check with text and multiple trailing blank lines to -body
+start_test "with text and multiple trailing blank lines to -body"
+# Shows different behavior than compiled mhmail, which suppressed one
+#   of the newlines.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender22@localhost>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender22@localhost
+Date:
+
+here's some text
+
+
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from sender22@localhost' -b "here's some text
+
+"
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -resent
+start_test "-resent"
+# Verified same behavior as compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<orig_recipient@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+Resent-To: recipient@example.com
+Resent-From: orig_recipient@example.com
+To: recipient@example.com
+From: sender23@localhost
+Date:
+Resent-Date:
+
+please resend this message, 1
+.
+QUIT
+EOF
+
+test_mhmail "$expected" '-from orig_recipient@example.com -resent' \
+  -b 'To: recipient@example.com
+From: sender23@localhost
+Date: Sat Jun 16 18:35:15 -0500
+
+please resend this message, 1'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+# check -resent -profile, using stdin
+start_test "-resent -profile, using stdin"
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<orig_recipient@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender24@localhost
+Date:
+Resent-To: recipient@example.com
+Resent-From: orig_recipient@example.com
+Resent-Date:
+
+please resend this message, 2
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  '-from orig_recipient@example.com -resent -profile -nomsgid' \
+  '|' 'To: recipient@example.com
+From: sender24@localhost
+Date: Sat Jun 16 18:35:15 -0500
+
+please resend this message, 2'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -resent -profile, using -b
+start_test "-resent -profile, using -b"
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<orig_recipient@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender25@localhost
+Date:
+Resent-To: recipient@example.com
+Resent-From: orig_recipient@example.com
+Resent-Date:
+
+please resend this message, 3
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  '-from orig_recipient@example.com -resent -profile -nomsgid' \
+  -b 'To: recipient@example.com
+From: sender25@localhost
+Date: Sat Jun 16 18:35:15 -0500
+
+please resend this message, 3'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -headerfield.
+start_test "-headerfield."
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender26@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender26@example.com
+User-Agent: nmh
+Date:
+
+with added header field
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  '-from sender26@example.com -headerfield User-Agent:nmh' \
+  -b 'with added header field'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check multiple -headerfields.
+start_test "multiple -headerfields."
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender27@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender27@example.com
+MIME-Version: 1.0
+Content-Type: text/plain;charset=utf-8
+Content-Transfer-Encoding: 7bit
+Date:
+
+with added header fields
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  "-from sender27@example.com -headerfield MIME-Version:1.0 \
+-headerfield Content-Type:text/plain;charset=utf-8 \
+-headerfield Content-Transfer-Encoding:7bit" \
+  -b 'with added header fields'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+# check -attach
+start_test "-attach"
+# Not supported by compiled mhmail.
+cat > "$expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<sender28@example.com>
+RCPT TO:<recipient@example.com>
+DATA
+To: recipient@example.com
+From: sender28@example.com
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+Date:
+Message-ID:
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii"
+
+See how easy it is to add an attachment!
+
+------- =_aaaaaaaaaa0
+Content-Type: `content_type_string ${srcdir}/test/mhmail/attachment.txt`
+Content-Description: attachment.txt
+Content-Disposition: attachment; filename="attachment.txt"
+
+The future disappears into memory, With only a moment between,
+Forever dwells in that moment, hope is what remains to be seen
+Forever dwells in that moment, hope is what remains to be seen.
+
+------- =_aaaaaaaaaa0--
+.
+QUIT
+EOF
+
+test_mhmail "$expected" \
+  "-from sender28@example.com -attach ${srcdir}/test/mhmail/attachment.txt" \
+  -b 'See how easy it is to add an attachment!'
+
+[ ${failed:-0} -eq 0 ] || exit ${failed:-0}
+
+
+finish_test
+exit ${failed:-0}

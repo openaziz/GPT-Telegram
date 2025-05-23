@@ -1,0 +1,101 @@
+.TH NEW %manext1% 2009-01-17 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+new \- report on nmh folders with new messages
+.br
+fnext \- set current nmh folder to next folder with new messages
+.br
+fprev \- set current nmh folder to previous folder with new messages
+.br
+unseen \- scan any new messages in all nmh folders
+.SH SYNOPSIS
+.HP 5
+.na
+.B new
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ sequences ]
+.RB [ \-mode
+.IR mode ]
+.RB [ \-folders
+.IR foldersfile ]
+.HP 5
+.B fnext
+is equivalent to
+.B new \-mode fnext
+.HP 5
+.B fprev
+is equivalent to
+.B new \-mode fprev
+.HP 5
+.B unseen
+is equivalent to
+.B new \-mode unseen
+.ad
+.SH DESCRIPTION
+.BR new ,
+in its default mode, produces a one-line-per-folder listing of all
+folders which contain messages in the specified
+.IR sequences ,
+or in the sequence(s) listed in the profile entry
+.RI \*(lq Unseen-Sequence \*(rq.
+Each line consists of the folder name, the total number of messages
+in the specified sequences, and a list of messages derived from the
+\&.mh_sequence file.  For example:
+.PP
+.RS 5
+.nf
+foo     11.* 40\-50
+bar    380.  760\-772 824\-828
+ total    391.
+.fi
+.RE
+.PP
+The `*' on foo indicates that it is the current folder.  The last line shows
+the total number of messages in the desired sequences.
+.PP
+.B new
+crawls the folder hierarchy recursively to find all folders, and prints them
+in lexicographic order.  Override this behavior by providing a
+.I foldersfile
+containing the pre-sorted list of folders which
+.B new
+should check, one per line.
+.PP
+In
+.B fnext
+and
+.B fprev
+modes,
+.B new
+changes to the next or previous matching folder, respectively.
+.PP
+In
+.B unseen
+mode,
+.B new
+executes
+.B scan
+.I sequences
+for each matching folder.
+.SH FILES
+.TP 20
+$HOME/.mh_profile
+The user profile
+.SH "PROFILE COMPONENTS"
+.PD 0
+.TP 20
+Path:
+To determine the user's nmh directory.
+.TP 20
+Current\-Folder:
+To find the default current folder.
+.TP 20
+Unseen-Sequence:
+The name of the unseen message sequence.
+.PD
+.SH "SEE ALSO"
+.IR scan (1),
+.IR mh\-format (5)

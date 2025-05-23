@@ -1,0 +1,89 @@
+.TH RMF %manext1% 1999-04-30 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+rmf \- remove an nmh folder
+.SH SYNOPSIS
+.HP 5
+.na
+.B rmf
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RB [ \-interactive " | " \-nointeractive ]
+.ad
+.SH DESCRIPTION
+.B rmf
+removes all of the messages (files) within the specified (or default)
+folder, and then removes the folder (directory) itself.
+.PP
+If there are any files within the folder which are not a part of
+.BR nmh ,
+they will
+.I not
+be removed, and an error will be produced.
+If the folder is given explicitly, or the
+.B \-nointeractive
+option is given, then the folder will be removed without confirmation.
+Otherwise,
+the user will be asked for confirmation.  If
+.B rmf
+can't, for some reason, find the current folder the folder to be removed defaults
+to `+inbox' (unless overridden by the user's profile entry \*(lqInbox\*(rq),
+with confirmation.
+.PP
+If the folder being removed is a subfolder, the parent folder will become
+the new current folder, and
+.B rmf
+will produce a message telling the user this has happened.
+This provides an easy mechanism for selecting a set of messages,
+operating on the list, then removing the list and returning to the
+current folder, from which the list was extracted.
+.PP
+If
+.B rmf
+is used on a read-only folder, it will delete all the private sequences
+(i.e., .RI \*(lqatr\- seq \- folder \*(rq entries) for this folder
+from your context without affecting the folder itself.
+.PP
+.B rmf
+irreversibly deletes messages that don't have other links, so
+use it with caution.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^Inbox:~^To find the default inbox
+.fi
+.SH "SEE ALSO"
+.IR folder (1),
+.IR rmm (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder, usually with confirmation"
+.RB ` \-interactive "' if +folder' not given, `\-nointeractive' otherwise"
+.fi
+.SH CONTEXT
+.B rmf
+will set the current folder to the parent folder if a subfolder is removed;
+or if the current folder is removed, it will make \*(lqinbox\*(rq current.
+Otherwise, it doesn't change the current folder or message.
+.SH BUGS
+Although intuitively one would suspect that
+.B rmf
+works recursively, it does not.
+Hence, if you have a sub-folder within a folder, in order to
+.B rmf
+the parent, you must first
+.B rmf
+each of the children.

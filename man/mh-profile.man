@@ -1,0 +1,1097 @@
+.TH MH-PROFILE %manext5% 2016-10-19 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mh-profile, mh_profile \- user customization for nmh message handler
+.SH DESCRIPTION
+Each user of
+.B nmh
+is expected to have a file named
+.I \&.mh\-profile
+in their home directory.  This file contains
+a set of user parameters used by the
+.B nmh
+family of programs.  Each entry in the file is of the format
+.PP
+.RS 5
+.IR profile-component ": " value
+.RE
+.PP
+If the text of a profile entry is long, you may extend it across several
+real lines by indenting the continuation lines with leading spaces or tabs.
+Comments may be introduced by a line starting with `#:':
+.PP
+.RS 5
+.IR # ": "
+This is a comment.
+.RE
+.PP
+Blank lines are not permitted in
+.IR \&.mh\-profile .
+Shell quoting conventions are not available; each token is separated
+by whitespace.
+.SS "Standard Profile Entries"
+The possible profile components are exemplified below.  The only mandatory
+entry is `Path:'.  The others are optional; some have default values if
+they are not present.  In the notation used below, (profile, default)
+indicates whether the information is kept in the user's
+.B nmh
+profile or
+.B nmh
+context, and indicates what the default value is.  Note that a profile
+component can only appear once.  Multiple appearances will trigger a
+warning that all appearances after the first are ignored.
+.PP
+Some MH programs, including
+.BR mhbuild ,
+.BR mhshow ,
+and
+.BR mhstore ,
+have specific profile components that are described in their respective
+man pages.  Each component name specific to these programs begins with
+the name of the program and is followed by a dash.
+.PP
+.BR Path :
+Mail
+.RS 5
+Locates
+.B nmh
+transactions in directory \*(lqMail\*(rq.  A relative Path starts from
+the user's home directory.  This is the only mandatory profile entry.
+(profile, no default)
+.RE
+.PP
+.BR locale :
+locale
+.RS 5
+Set the locale for all
+.B nmh
+programs except
+.BR post ,
+.BR install-mh ,
+and
+.BR slocal .
+See the LC_ALL, LC_CTYPE, and LANG variables in the "ENVIRONMENT"
+section below for a reference on how the locale is set if this profile
+component is not used.
+.RE
+.PP
+.BR context :
+context
+.RS 5
+Declares the location of the
+.B nmh
+context file.  This can be overridden by the environment variable
+MHCONTEXT.
+See the
+.B HISTORY
+section below.
+(profile, default: <nmh-dir>/context)
+.RE
+.PP
+.BR Current\-Folder :
+inbox
+.RS 5
+Keeps track of the current open folder.
+(context, default: folder specified by \*(lqInbox\*(rq)
+.RE
+.PP
+.BR Inbox :
+inbox
+.RS 5
+Defines the name of the default inbox.
+(profile, default: inbox)
+.RE
+.PP
+.BR Previous\-Sequence :
+.I pseq
+.RS 5
+Names the sequence or sequences which should be defined as the `msgs' or
+`msg' argument given to any
+.B nmh
+command.  If not present or empty,
+no such sequences are defined.  Otherwise, for each name given, the
+sequence is first zeroed and then each message is added to the sequence.
+Read
+.IR mh\-sequence (5)
+for the details about this sequence.  (profile, no default)
+.RE
+.PP
+.BR Sequence\-Negation :
+not
+.RS 5
+Defines the string which, when prefixed to a sequence name, negates
+that sequence.  Hence, \*(lqnotseen\*(rq means all those messages that
+are not a member of the sequence \*(lqseen\*(rq.  Read
+.IR mh\-sequence (5)
+for the details.  (profile, no default)
+.RE
+.PP
+.BR Unseen\-Sequence :
+unseen
+.RS 5
+Names the sequence or sequences which should be defined as those
+messages which are unread.  The commands
+.BR inc ,
+.BR rcvstore ,
+.BR mhshow ,
+and
+.B show
+will add or remove messages from these
+sequences when they are incorporated or read.  If not present or
+empty, no such sequences are defined.  Otherwise, each message is
+added to, or removed from, each sequence name given.  Read
+.IR mh\-sequence (5)
+for the details about this sequence.
+(profile, no default)
+.RE
+.PP
+.BR mh\-sequences :
+\&.mh\-sequences
+.RS 5
+The name of the file in each folder which defines public sequences.
+To disable the use of public sequences, leave the value portion of this
+entry blank.  (profile, default: \&.mh\-sequences)
+.RE
+.PP
+.BI atr\- seq \- folder :
+172\0178\-181\0212
+.RS 5
+Keeps track of the private sequence called \*(lqseq\*(rq in the specified
+folder.  Private sequences are generally used for read-only folders.
+See
+.IR mh\-sequence (5)
+for details about private sequences.
+(context, no default)
+.RE
+.PP
+.BR Editor :
+prompter
+.RS 5
+Defines the editor to be used by the commands
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.BR repl .
+If not set, the value will be taken from the VISUAL and EDITOR environment
+variables.  (profile, default: prompter)
+.RE
+.PP
+.BR Msg\-Protect :
+600
+.RS 5
+An octal number which defines the permission bits for new message files.
+See
+.IR chmod (1)
+for an explanation of the octal number.  Note that some filesystems,
+such as FAT32, do not support removal of read file permissions.
+(profile, default: 0600)
+.RE
+.PP
+.BR Folder\-Protect :
+700
+.RS 5
+An octal number which defines the permission bits for new folder
+directories.  See
+.IR chmod (1)
+for an explanation of the octal number.
+(profile, default: 700)
+.RE
+.PP
+.BR datalocking :
+fcntl
+.RS 5
+The locking algorithm used to lock changes to any
+.B nmh
+data files, such as sequences or context.  The locking algorithm is
+any one of the following entries:
+.PP
+.RS 5
+.nf
+%supported_locks%
+.fi
+.RE
+.PP
+Available locking algorithms can vary depending on the operating system.
+Note: currently, transactional locking is only supported on public sequences; see
+.IR mh\-sequence (5)
+for more information.
+(profile, default: fcntl)
+.RE
+.PP
+.IR program :
+.I default switches
+.RS 5
+Sets default switches to be used whenever the mh program
+.I program
+is invoked.  For example, one could override the \*(lqEditor:\*(rq profile
+component when replying to messages by adding a component such as:
+.PP
+.RS 5
+repl: \-editor /bin/ed
+.RE
+.PP
+(profile, no defaults)
+.RE
+.PP
+.IB lasteditor "-next:"
+.I nexteditor
+.RS 5
+Names \*(lqnexteditor\*(rq to be the default editor after using
+\*(lqlasteditor\*(rq.  This takes effect at the \*(lqWhat now?\*(rq prompt
+in
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.BR repl .
+After editing the draft with \*(lqlasteditor\*(rq, the default editor is
+set to be \*(lqnexteditor\*(rq.  If the user types \*(lqedit\*(rq without
+any arguments to \*(lqWhat now?\*(rq, then \*(lqnexteditor\*(rq is used.
+(profile, no default)
+.RE
+.PP
+.BR Folder\-Stack :
+.I folders
+.RS 5
+The contents of the folder-stack for the
+.B folder
+command.
+(context, no default)
+.RE
+.PP
+.BR Local\-Mailbox :
+Your Username <user@some.host>
+.RS 5
+Tells the MH programs what your local mailbox is.  If set, it will be used
+by the default component files by programs like
+.B comp
+and
+.B repl
+to construct your default \*(lqFrom:\*(rq header.  The text used here will
+be copied exactly to your \*(lqFrom:\*(rq header, so it should already be RFC
+822 compliant.  If this is set, the
+.B Signature
+profile entry is
+.I not
+used, so it should include a signature as well.  (profile,
+default: userid@local.hostname)
+.RE
+.PP
+.BR Alternate\-Mailboxes :
+mh@uci\-750a, bug-mh*
+.RS 5
+Tells
+.B repl
+and
+.B scan
+which additional addresses are yours.  In this way,
+.B repl
+knows which addresses should be included in the reply, and
+.B scan
+knows if a message originated from you.  Addresses must be separated by a comma,
+and the hostnames listed should be the \*(lqofficial\*(rq hostnames for the
+mailboxes you indicate, as local nicknames for hosts are not replaced with
+their official site names.  For each address, if a host is not given, then
+that address on any host is considered to be you.  In addition, an asterisk
+(`*') may appear at either or both ends of the mailbox and host to indicate
+wild-card matching.  (profile, default: your user-id)
+.RE
+.PP
+.BR Aliasfile :
+aliases
+.I other-aliases
+.RS 5
+Indicates alias files for
+.BR ali ,
+.BR whom ,
+and
+.BR send .
+This may be used instead of the
+.B \-alias
+.I file
+switch.  (profile, no default)
+.RE
+.PP
+.BR Draft\-Folder :
+drafts
+.RS 5
+Indicates a default draft folder for
+.BR comp ,
+.BR dist ,
+.BR forw ,
+.BR refile ,
+and
+.BR repl .
+Read
+.IR mh\-draft (5)
+for details.  (profile, no default)
+.RE
+.PP
+.BI digest\-issue\- list :
+1
+.RS 5
+Tells
+.B forw
+the last issue of the last volume sent for the digest
+.IR list .
+(context, no default)
+.RE
+.PP
+.BI digest\-volume\- list :
+1
+.RS 5
+Tells
+.B forw
+the last volume sent for the digest
+.IR list .
+(context, no default)
+.RE
+.PP
+.BR MailDrop :
+\&.mail
+.RS 5
+Tells
+.B inc
+your mail drop, if different from the default.  This is
+superseded by the environment variable MAILDROP.
+(profile, default: %mailspool%/$USER)
+.RE
+.PP
+.BR Signature :
+RAND MH System (agent: Marshall Rose)
+.RS 5
+Tells front-end programs such as
+.BR comp ,
+.BR forw ,
+and
+.B repl
+your mail signature.  (This is not to be confused with a .signature
+that might be appended to mails.) This is superseded by the environment
+variable SIGNATURE.  If SIGNATURE is not set and this profile entry is
+not present, the \*(lqgcos\*(rq field of the \fI/etc/passwd\fP file
+will be used.  Your signature will be added to the address
+.B send
+puts in the \*(lqFrom:\*(rq header; do not include an address in the
+signature text.  The \*(lqLocal\-Mailbox\*(rq profile component
+supersedes all of this.  (profile, no default)
+.RE
+.PP
+.BR credentials :
+legacy
+.RS 5
+Indicates how the username and password credentials will be retrieved
+for access to external servers, such as those that provide SMTP or POP
+service.  The supported entry values are \*(lqlegacy\*(rq,
+.RI \*(lqfile: netrc \*(rq,
+and
+.RI \*(lqfile\-nopermcheck: netrc \*(rq.
+With \*(lqlegacy\*(rq, or if there is no credentials entry, the
+username is the first of:
+.RS 5
+.TP 5
+.PD 0
+1)
+.B \-user
+switch to
+.BR inc ,
+.BR msgchk ,
+.BR post ,
+.BR send ,
+or
+.B whom
+program
+.TP
+2)
+the login name on the local machine
+.PD
+.RE
+.PP
+The password for SMTP services is the first of:
+.RS 5
+.TP 5
+.PD 0
+1)
+password value from matching entry in file named \*(lq.netrc\*(rq
+in the user's home directory
+.TP
+2)
+password obtained by interactively prompting the user
+.PD
+.RE
+.PP
+With a
+.RI \*(lqfile: netrc \*(rq
+.B credentials
+entry, the username is the first of:
+.RS 5
+.PD 0
+.TP 5
+1)
+.B \-user
+switch to program
+.TP 5
+2)
+login name from matching entry in
+.I netrc
+file
+.TP 5
+3)
+value provided by user in response to interactive query
+.PD
+.RE
+.PP
+Similarly, the password is provided either in the
+.I netrc
+file or interactively.
+.I netrc
+can be any valid filename, either absolute or relative to Path or
+$HOME.  The
+.I netrc
+file contains authentication information, for each server,
+using a line of the following form.  (Replace
+.IR myserver ,
+.IR mylogin ,
+and
+.I mypassword
+with your own account information.)
+.PP
+.RS 5
+.B machine
+.I myserver
+.B login
+.I mylogin
+.B password
+.I mypassword
+.RE
+.PP
+This
+.I netrc
+file must be owned and readable only by you.
+.PP
+The
+.RI \*(lqfile\-nopermcheck: netrc \*(rq
+.B credentials
+entry is identical in behavior to the \*(lqfile\*(rq entry, with the
+exception that the permission checks done by
+\*(lqfile\*(rq are not performed.  This entry should be used with
+caution and only when absolutely necessary.
+(profile, default: legacy)
+.RE
+.PP
+.BR Welcome :
+disable
+.RS 5
+If the Welcome component is not present, or its value is not
+.RI \*(lq disable \*(rq,
+a welcome message will be displayed the first time that an interactive
+.B nmh
+program is run after updating the
+.B nmh
+installation.
+The user must press the Enter key to continue.
+.PP
+If the MHCONTEXT environment variable is set and non-empty (and
+the Welcome component is not
+.RI \*(lq disable \*(rq),
+the welcome message is only displayed if the context file contains a version
+reference, and that reference is older than the installed
+.B nmh
+version.  The version reference is of the form:
+.PP
+.RS 5
+.nf
+Version: %nmhversion%
+.fi
+.RE
+.RE
+.SS "Process Profile Entries"
+The following profile elements are used whenever an
+.B nmh
+program invokes some other program, such as
+.BR more .
+The
+.I \&.mh\-profile
+can be used to select alternate programs if the user wishes.
+The default values are given in the examples.
+.PP
+If the profile element contains spaces, the element is split at spaces
+into tokens and each token is given as a separate argument to the
+.IR execvp (2)
+system call.  If the element contains shell metacharacters then the entire
+element is executed using
+.BR /bin/sh .
+.PP
+.BR buildmimeproc :
+%bindir%/mhbuild
+.RS 5
+This is the program used by
+.B whatnow
+to process drafts which are MIME composition files.
+.RE
+.PP
+.BR fileproc :
+%bindir%/refile
+.RS 5
+This program is used to refile or link a message to another folder.
+It is used by
+.B post
+to file a copy of a message into a folder given
+by a \*(lqFcc:\*(rq field.  It is used by the draft folder facility in
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+to refile a draft
+message into another folder.  It is used to refile a draft message in
+response to the
+.B refile
+directive at the \*(lqWhat now?\*(rq prompt.
+.RE
+.PP
+.BR formatproc :
+.RS 5
+Program called by
+.B mhl
+to filter a component when it is tagged with the \*(lqformat\*(rq variable
+in the mhl filter.  See
+.IR mhl (5)
+for more information.
+.RE
+.PP
+.BR incproc :
+%bindir%/inc
+.RS 5
+Program called by
+.B mhmail
+to incorporate new mail when it
+is invoked with no arguments.
+.RE
+.PP
+.BR lproc :
+more
+.RS 5
+This program is used to list the contents of a message in response
+to the
+.B list
+directive at the \*(lqWhat now?\*(rq prompt.  It is
+also used by the draft folder facility in
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+to display the draft message.
+(Note that
+the environment variable PAGER
+supersedes the default built-in pager command.)
+.RE
+.PP
+.BR mailproc :
+%bindir%/mhmail
+.RS 5
+This is the program used to automatically mail various messages
+and notifications.  It is used by
+.B send
+to post failure notices.
+It is used to retrieve an external-body with access-type `mail-server'
+(such as when storing the body with
+.BR mhstore ).
+.RE
+.PP
+.BR mhlproc :
+%nmhlibexecdir%/mhl
+.RS 5
+This is the program used to filter messages in various ways.  It
+is used by
+.B mhshow
+to filter and display the message headers
+of MIME messages.  When the
+.B \-format
+or
+.B \-filter
+option is used
+by
+.B forw
+or
+.BR repl ,
+the
+.I mhlproc
+is used to filter the
+message that you are forwarding, or to which you are replying.
+When the
+.B \-filter
+option is given to
+.BR send ,
+the
+.I mhlproc
+is used to filter the copy of the message
+that is sent to \*(lqBcc:\*(rq recipients.
+.RE
+.PP
+.BR moreproc :
+more
+.RS 5
+This is the program used by
+.B mhl
+to page the
+.B mhl
+formatted message when displaying to a terminal.  It is also the default
+program used by
+.B mhshow
+to display message bodies (or message parts) of type text/plain.
+(Note that
+the environment variable PAGER
+supersedes the default built-in pager command.)
+.RE
+.PP
+.BR packproc :
+%bindir%/packf
+.RS 5
+Currently not used.
+.RE
+.PP
+.BR postproc :
+%nmhlibexecdir%/post
+.RS 5
+This is the program used by
+.BR send ,
+.BR mhmail ,
+.BR rcvdist ,
+and
+.B viamail
+(used by the
+.B sendfiles
+shell script) to
+post a message to the mail transport system.  It is also called by
+.B whom
+(called with the switches
+.B \-whom
+and
+.BR \-library )
+to do address verification.
+.PP
+If the profile contains a
+.B post
+component and a
+.B postproc
+component is not present, a warning message that the
+.B post
+component will be ignored will be displayed by every
+.B nmh
+program that reads the profile and has its stderr associated with a terminal.
+.RE
+.PP
+.BR rmmproc :
+none
+.RS 5
+This is the program used by
+.BR rmm ,
+.BR refile ,
+and
+.B mhfixmsg
+to delete a message from a folder.
+.RE
+.PP
+.BR sendproc :
+%bindir%/send
+.RS 5
+This is the program used by
+.B whatnow
+to actually send the message
+.RE
+.PP
+.BR showmimeproc :
+%bindir%/mhshow
+.RS 5
+This is the program used by
+.B show
+to process and display non-text (MIME) messages.
+.RE
+.PP
+.BR showproc :
+%nmhlibexecdir%/mhl
+.RS 5
+This is the program used by
+.B show
+to filter and display text (non-MIME) messages.
+.RE
+.PP
+.BR whatnowproc :
+%bindir%/whatnow
+.RS 5
+This is the program invoked by
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+to query about the disposition of a composed draft message.
+.RE
+.PP
+.BR whomproc :
+%bindir%/whom
+.RS 5
+This is the program used by
+.B whatnow
+to determine to whom a message would be sent.
+.RE
+.SS "Profile Lookup"
+After consulting .mh_profile, some programs read an optional profile
+specified by a program-specific environment variable, and then the
+system-wide profile %nmhetcdir%/mhn.defaults.
+These programs are
+.BR mhbuild ,
+.BR mhshow ,
+.BR mhstore ,
+and
+.BR mhn .
+.B mhfixmsg
+is similar, but has no optional profile.
+.PP
+The first occurrence of a component is used, e.g.\& .mh_profile's
+trumps $MHSHOW's.  A component with no value still stops further
+occurrences being used, but is considered absent.
+.PP
+The
+.I \&.mh\-profile
+contains only static information, which
+.B nmh
+programs will
+.I not
+update.  Changes in context are made to the
+.I context
+file kept in the users
+.B nmh
+directory.  This includes, but is not limited to: the
+\*(lqCurrent\-Folder\*(rq entry and all private sequence information.
+Public sequence information is kept in each folder in the file
+determined by the \*(lqmh\-sequences\*(rq profile entry (default is
+.IR \&.mh\-sequences ).
+.PP
+The
+.I \&.mh\-profile
+may override the path of the
+.I context
+file, by specifying a \*(lqcontext\*(rq entry (this must be in
+lower-case).  If the entry is not absolute (does not start with a
+\*(lq/\*(rq), then it is interpreted relative to the user's
+.B nmh
+directory.  As a result, you can actually have more than one set of
+private sequences by using different context files.
+.SH ENVIRONMENT
+The operation of
+.B nmh
+and its commands it also controlled by the
+presence of certain environment variables.
+.PP
+Many of these environment variables are used internally by the
+\*(lqWhat now?\*(rq interface.  It's amazing all the information
+that has to get passed via environment variables to make the
+\*(lqWhat now?\*(rq interface look squeaky clean to the
+.B nmh
+user, isn't it?  The reason for all this is that the
+.B nmh
+user can select any program as the
+.IR whatnowproc ,
+including one of the standard shells.  As a result, it's not possible
+to pass information via an argument list.  The convention is that
+environment variables whose names are all upper-case are user-settable;
+those whose names are lower-case only are used internally by nmh and
+should not generally be set by the user.
+.TP
+HOME
+If set and non-null, it is used as the user's home directory.
+If not set or null, then getpwuid(3)'s pw_dir is used.
+.TP
+LC_ALL, LC_CTYPE, and LANG
+These variables are used to set the locale, see locale(1).
+The \*(lqlocale\*(rq profile entry supersedes these.
+.TP
+MAILDROP
+This variable tells
+.B inc
+the default mail drop.  This supersedes the \*(lqMailDrop\*(rq
+profile entry.
+.TP
+MAILHOST
+This variable tells
+.B inc
+the POP host to query for mail to incorporate.  See
+.IR inc (1)
+for more information.
+.TP
+MH
+With this environment variable, you can specify a profile
+other than
+.I \&.mh\-profile
+to be read by the
+.B nmh
+programs that you invoke.  If the value of MH is not absolute,
+(i.e., does not begin with a \*(lq/\*(rq), it will be presumed
+to start from the current working directory.  This is one of the
+very few exceptions in
+.B nmh
+where non-absolute pathnames are not considered relative to the user's
+.B nmh
+directory.
+.TP
+MHBUILD
+With this environment variable, you can specify an additional user profile
+(file) to be read by
+.BR mhbuild ,
+in addition to the mhn.defaults profile.
+.TP
+MHCONTEXT
+With this environment variable, you can specify a context other than the
+normal context file (as specified in the
+.B nmh
+profile).  As usual, unless the value of MHCONTEXT is absolute, it will
+be presumed to start from your
+.B nmh
+directory.
+.TP
+MHLDEBUG
+If this variable is set to a non-null value,
+.B mhl
+will emit debugging information.
+.TP
+MHMTSCONF
+If this variable is set to a non-null value, it specifies the
+name of the mail transport configuration file to use by
+.BR inc ,
+.BR post ,
+and other programs that interact with the mail transport system,
+instead of the default.  See
+.IR mh-tailor (5).
+.TP
+MHMTSUSERCONF
+If this variable is set to a non-null value, it specifies the name of
+a mail transport configuration file to be read in addition to the
+default.  See
+.IR mh-tailor (5).
+.TP
+MHN
+With this environment variable, you can specify an additional user
+profile (file) to be read by
+.BR mhn ,
+in addition to the mhn.defaults profile.
+.B mhn
+is deprecated, so support for this variable will be removed from a
+future nmh release.
+.TP
+MHSHOW
+With this environment variable, you can specify an additional user
+profile (file) to be read by
+.BR mhshow ,
+in addition to the mhn.defaults profile.
+.TP
+MHSTORE
+With this environment variable, you can specify an additional user
+profile (file) to be read by
+.BR mhstore ,
+in addition to the mhn.defaults profile.
+.TP
+MHTMPDIR, TMPDIR
+These variables are searched, in order, for the directory in which to
+create some temporary files.
+MHTMPDIR is deprecated and will be removed in a future release of nmh.
+.TP
+MHWDEBUG
+If this variable is set to a non-null value,
+.B nmh
+commands that use the
+.B Alternate\-Mailboxes
+profile entry will display debugging information about the values in
+that entry.
+.TP
+PAGER
+If set to a non-null value, this supersedes the value of the default
+built-in pager command.
+.TP
+SIGNATURE
+This variable tells
+.B send
+and
+.B post
+your mail signature.  This supersedes the \*(lqSignature\*(rq profile entry,
+and is not used when the \*(lqLocal\-Mailbox\*(rq profile component is set.
+.TP
+USER
+This variable tells
+.B repl
+your user name and
+.B inc
+your default mail drop:  see the \*(lqMailDrop\*(rq profile entry.
+.TP
+USERNAME_EXTENSION
+This variable is for use with username_extension masquerading.  See
+.IR mh-tailor (5).
+.TP
+editalt
+This is the alternate message.  This is set by
+.B dist
+and
+.B repl
+during edit sessions so you can peruse the message being distributed or
+replied to.  The message is also available, when the
+.B \-atfile
+switch is used, through a link called \*(lq@\*(rq in the current directory
+if your current working directory and the folder the message lives in are
+on the same Unix filesystem, and if your current working directory is
+writable.
+.TP
+mhaltmsg
+.B dist
+and
+.B repl
+set mhaltmsg to tell the
+.I whatnowproc
+about an alternate message associated with the
+draft (the message being distributed or replied to).
+.TP
+mhannotate
+This is set by
+.BR dist ,
+.BR forw ,
+and
+.B repl
+if annotations are to occur.
+.TP
+mhdist
+.B dist
+sets mhdist to tell the
+.I whatnowproc
+that message re-distribution is occurring.
+.TP
+mhdraft
+This is the path to the working draft.  It is set by
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+to tell the
+.I whatnowproc
+which file to ask \*(lqWhat now?\*(rq questions about.
+.TP
+mheditor
+This is set by
+.BR comp ,
+.BR repl ,
+.BR forw ,
+and
+.B dist
+to tell the
+.I whatnowproc
+the user's choice of editor (unless overridden by
+.BR \-noedit ).
+.TP
+mhfolder
+This is the folder containing the alternate message.
+It is set by
+.B dist
+and
+.B repl
+during edit sessions so you can peruse other messages in the current
+folder besides the one being distributed or replied to.
+The environment variable mhfolder is also set by
+.BR next ,
+.BR prev ,
+and
+.B show
+for use by
+.BR mhl .
+.TP
+mhinplace
+This is set by
+.BR dist ,
+.BR forw ,
+and
+.B repl
+if annotations are to occur.
+.TP
+mhmessages
+This is set by
+.BR dist ,
+.BR forw ,
+and
+.B repl
+if annotations are to occur.
+.TP
+mhuse
+This may be set by
+.BR comp .
+.SH FILES
+.PD 0
+.TP 20
+$HOME/.mh\-profile
+The user's profile.
+.TP
+<mh-dir>/context
+The user's context
+.TP
+<folder>/.mh\-sequences
+Public sequences for <folder>.
+.PD
+.SH "SEE ALSO"
+.IR mhbuild (1),
+.IR mhshow (1),
+.IR mhstore (1),
+.IR mh-sequence (5),
+.IR nmh (7),
+.IR post (8)
+.SH BUGS
+There is some question as to what kind of arguments should be placed
+in the profile as options.  In order to provide a clear answer, recall
+the command line semantics of all
+.B nmh
+programs: conflicting switches
+(e.g.
+.B \-header
+and
+.BR \-noheader )
+may occur more than one time on the command line, with the last switch
+taking effect.  Other arguments, such as message sequences, filenames
+and folders, are always remembered on the invocation line and are not
+superseded by following arguments of the same type.
+Hence, it is safe to place only switches (and their arguments) in the profile.
+.PP
+If one finds that an
+.B nmh
+program is being invoked again and again with the same arguments, and those
+arguments aren't switches, then there are a few possible solutions to this
+problem.  The first is to create a (soft) link in your
+.I $HOME/bin
+directory to the
+.B nmh
+program of your choice.  By giving this link a different name, you can create
+a new entry in your profile and use an alternate set of defaults for
+the
+.B nmh
+command.  Similarly, you could create a small shell script
+which called the
+.B nmh
+program of your choice with an alternate set
+of invocation line switches (using links and an alternate profile entry
+is preferable to this solution).
+.PP
+Finally, the
+.B csh
+user could create an alias for the command of the form:
+.PP
+.RS 5
+alias cmd 'cmd arg1 arg2 ...'
+.RE
+.PP
+In this way, the user can avoid lengthy type-in to the shell, and still
+give
+.B nmh
+commands safely.  (Recall that some
+.B nmh
+commands
+invoke others, and that in all cases, the profile is read, meaning that
+aliases are disregarded beyond an initial command invocation)

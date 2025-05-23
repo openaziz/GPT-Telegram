@@ -1,0 +1,36 @@
+There are currently three mailing lists related to nmh:
+
+nmh-announce@nongnu.org
+-----------------------
+This is a very low-traffic mailing list for announcing new releases,
+patches, and important events related to nmh.
+
+To subscribe or manage your subscription options, go to:
+  https://lists.nongnu.org/mailman/listinfo/nmh-announce
+
+
+nmh-workers@nongnu.org
+----------------------
+This is the main list for discussing work on nmh.  There is currently
+no nmh-users mailing list, so user questions are acceptable here (the
+comp.mail.mh newsgroup is another good option).  Bug reports and
+feedback should be submitted here.
+
+To subscribe or manage your subscription options, go to:
+  https://lists.nongnu.org/mailman/listinfo/nmh-workers
+
+
+nmh-commits@nongnu.org
+----------------------
+All commits to the nmh source code repository are copied to this list.
+Therefore, it is probably only of interest to nmh developers.
+
+To subscribe or manage your subscription options, go to:
+  https://lists.nongnu.org/mailman/listinfo/nmh-commit
+
+
+mail archives
+-------------
+The nmh-workers and nmh-commits mailings lists archives are available here:
+  http://lists.nongnu.org/archive/html/nmh-workers/
+  http://lists.nongnu.org/archive/html/nmh-commits/

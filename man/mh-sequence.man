@@ -1,0 +1,355 @@
+.TH MH-SEQUENCE %manext5% 2013-10-17 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mh-sequence \- sequence specification for nmh message system
+.SH DESCRIPTION
+A sequence (or sequence set) is a symbolic name representing a
+message or collection of messages.
+.B nmh
+has several internally defined sequences, as well as allowing
+users to define their own sequences.
+.SS "Message Specification and Pre-Defined Message Sequences"
+Most
+.B nmh
+commands accept a `msg' or `msgs' specification, where `msg'
+indicates one message and `msgs' indicates one or more messages.
+To designate a message, you may use either its number (e.g., 1, 10, 234)
+or one of these \*(lqreserved\*(rq message names:
+.PP
+.RS 5
+.PD 0
+.TP
+.B first
+the first message in the folder
+.TP
+.B last
+the last message in the folder
+.TP
+.B cur
+the most recently accessed message
+.TP
+.B prev
+the message numerically preceding \*(lqcur\*(rq
+.TP
+.B next
+the message numerically following \*(lqcur\*(rq
+.RE
+.PD
+.PP
+In commands that take a `msg' argument, the default is \*(lqcur\*(rq.
+As a shorthand, \*(lq.\*(rq is equivalent to \*(lqcur\*(rq.
+.PP
+For example: In a folder containing five messages numbered 5, 10, 94, 177
+and 325, \*(lqfirst\*(rq is 5 and \*(lqlast\*(rq is 325.  If \*(lqcur\*(rq
+is 94, then \*(lqprev\*(rq is 10 and \*(lqnext\*(rq is 177.
+.PP
+The word `msgs' indicates that one or more messages may be specified.
+Such a specification consists of one message designation or of several
+message designations, as separate arguments.  A message designation consists
+either of a message name as defined above, or a message range.
+.PP
+A message range is specified as \*(lqname1\-name2\*(rq or
+\*(lqname:n\*(rq, where `name', `name1' and `name2' are message names,
+and `n' is an integer.
+.PP
+The specification \*(lqname1\-name2\*(rq designates all currently existing
+messages from `name1' to `name2' inclusive.  The \*(lqreserved\*(rq
+message name \*(lqall\*(rq is a shorthand for the message range
+\*(lqfirst\-last\*(rq.
+.PP
+The specification \*(lqname:n\*(rq designates up to `n' messages.
+These messages start with `name' if `name' is a message number or one of
+the reserved names \*(lqfirst\*(rq \*(lqcur\*(rq, or \*(lqnext\*(rq, The
+messages end with `name' if `name' is \*(lqprev\*(rq or \*(lqlast\*(rq.
+The interpretation of `n' may be overridden by preceding `n' with a
+plus or minus sign; `+n' always means up to `n' messages starting with
+`name', and `\-n' always means up to `n' messages ending with `name'.
+.PP
+Substituting `=' for `:' (i.e., \*(lqname=n\*(rq) will reduce the
+selection from a range of up to `n' messages, to a selection of
+just the `n'th message.  So for example, while \*(lqname:-3\*(rq
+selects the 3 messages ending with `name', \*(lqname=-3\*(rq selects
+just the 2nd previous message.  It is an error if the requested
+message does not exist (i.e., there aren't enough messages in the
+folder).
+.PP
+In commands which accept a `msgs' argument, the default is either
+\*(lqcur\*(rq or \*(lqall\*(rq, depending on which makes more sense
+for each command (see the individual man pages for details).  Repeated
+specifications of the same message have the same effect as a single
+specification of the message.
+.PP
+There is also a special \*(lqreserved\*(rq message name \*(lqnew\*(rq
+which is used by the
+.B mhpath
+command.
+.SS "User\-Defined Message Sequences"
+In addition to the \*(lqreserved\*(rq (pre-defined) message names given
+above,
+.B nmh
+supports user-defined sequence names.  User-defined sequences allow the
+.B nmh
+user a tremendous amount of power in dealing with groups of messages
+in the same folder by allowing the user to bind a group of messages
+to a meaningful symbolic name.
+.PP
+The name used to denote a message sequence must consist of an alphabetic
+character followed by zero or more alphanumeric characters, and can not
+be one of the \*(lqreserved\*(rq message names above.  After defining a
+sequence, it can be used wherever an
+.B nmh
+command expects a `msg' or
+`msgs' argument.
+.PP
+Some forms of message ranges are allowed with user-defined sequences.
+The specification \*(lqname:n\*(rq may be used, and it designates up
+to the first `n' messages (or last `n' messages for `\-n') which are
+elements of the user-defined sequence `name'.
+.PP
+The specifications \*(lqname:next\*(rq and \*(lqname:prev\*(rq may also
+be used, and they designate the next or previous message (relative to the
+current message) which is an element of the user-defined sequence `name'.
+The specifications \*(lqname:first\*(rq and \*(lqname:last\*(rq are
+equivalent to \*(lqname:1\*(rq and \*(lqname:\-1\*(rq, respectively.  The
+specification \*(lqname:cur\*(rq is not allowed (use just \*(lqcur\*(rq
+instead).  The syntax of these message range specifications is subject
+to change in the future.
+.PP
+Single messages (as opposed to ranges) may also be selected by
+substituting `=' for `:', as in \*(lqname=n\*(rq.  This will reduce
+the selection from being a range of up to `n' messages, to being a
+selection of just the `n'th message.  So while \*(lqseq:5\*(rq
+selects the first 5 messages of sequence `seq', \*(lqseq=5\*(rq
+selects just the 5th message of the sequence.  It is
+an error if the requested message does not exist (i.e., there aren't
+at least `n' messages in the sequence).
+.PP
+User-defined sequence names are specific to each folder.  They are
+defined using the
+.B pick
+and
+.B mark
+commands.
+.SS "Public and Private User-Defined Sequences"
+There are two varieties of user-defined sequences:
+public and private.  Public sequences of a folder are accessible to any
+.B nmh
+user that can read that folder.  They are kept in each folder
+in the file determined by the \*(lqmh\-sequences\*(rq profile entry
+(default is
+.IR \&.mh_sequences ).
+Private sequences are accessible
+only to the
+.B nmh
+user that defined those sequences and are kept in
+the user's
+.B nmh
+context file.
+.PP
+In general, the commands that create sequences (such as
+.B pick
+and
+.BR mark )
+will create public sequences if the folder for which
+the sequences are being defined is writable by the
+.B nmh
+user.
+For most commands, this can be overridden by using the switches
+.B \-public
+and
+.BR \-private .
+But if the folder is read-only, or if
+the \*(lqmh\-sequences\*(rq profile entry is defined but empty, then
+\fIprivate\fR sequences will be created instead.
+.SS "Sequence Negation"
+.B Nmh
+provides the ability to select all messages not elements of a
+user-defined sequence.  To do this, the user should define the entry
+\*(lqSequence\-Negation\*(rq in the
+.B nmh
+profile file; its value
+may be any string.  This string is then used to preface an existing
+user-defined sequence name.  This specification then refers to those
+messages not elements of the specified sequence name.  For example, if
+the profile entry is:
+.PP
+.RS 5
+Sequence\-Negation: not
+.RE
+.PP
+then any time an
+.B nmh
+command is given \*(lqnotfoo\*(rq as a `msg' or
+`msgs' argument, it would substitute all messages that are not elements
+of the sequence \*(lqfoo\*(rq.
+.PP
+Obviously, the user should beware of defining sequences with names that
+begin with the value of the \*(lqSequence\-Negation\*(rq profile entry.
+.SS "The Previous Sequence"
+.B Nmh
+provides the ability to remember the `msgs' or `msg' argument
+last given to an
+.B nmh
+command.  The entry \*(lqPrevious\-Sequence\*(rq
+should be defined in the
+.B nmh
+profile; its value should be a sequence
+name or multiple sequence names, as separate arguments.  If this entry
+is defined, when an
+.B nmh
+command finishes, it will define the sequence(s) named in the value
+of this entry to be those messages that were specified to the command.
+Hence, a profile entry of
+.PP
+.RS 5
+Previous\-Sequence: pseq
+.RE
+.PP
+directs any
+.B nmh
+command that accepts a `msg' or `msgs' argument to define the sequence
+\*(lqpseq\*(rq as those messages when it finishes.
+.PP
+.BR Note :
+there can be a performance penalty in using the
+\*(lqPrevious\-Sequence\*(rq facility.  If it is used,
+.B all
+.B nmh
+programs have to write the sequence information to the
+.I \&.mh_sequences
+file for the folder each time they run.  If the
+\*(lqPrevious\-Sequence\*(rq profile entry is not included, only
+.B pick
+and
+.B mark
+will write to the
+.B \&.mh_sequences
+file.
+.SS "The Unseen Sequence"
+Finally, many users like to indicate which messages have not been
+previously seen by them.  The commands
+.BR flist ,
+.BR inc ,
+.BR mhshow ,
+.BR rcvstore ,
+and
+.B show
+honor the profile entry \*(lqUnseen\-Sequence\*(rq to support this
+activity.  This entry in the
+.I \&.mh_profile
+should be defined as one or more sequence names, as separate arguments.
+If there is a value for \*(lqUnseen\-Sequence\*(rq in the profile,
+then whenever new messages are placed in a folder (using
+.B inc
+or
+.BR rcvstore ),
+the new messages will also be added to all the sequences named in this
+profile entry.  For example, a profile entry of
+.PP
+.RS 5
+Unseen\-Sequence: unseen
+.RE
+.PP
+directs
+.B inc
+to add new messages to the sequence \*(lqunseen\*(rq.
+Unlike the behavior of the \*(lqPrevious\-Sequence\*(rq entry in the
+profile, however, the sequence(s) will
+.I not
+be zeroed by
+.BR inc .
+.PP
+Similarly, whenever
+.BR show ,
+.BR mhshow ,
+.BR next ,
+or
+.B prev
+displays a message, that message will be removed from any sequences
+named by the \*(lqUnseen\-Sequence\*(rq entry in the profile.
+.SS Sequence File Format
+The sequence file format is based on the RFC 5322 message format.  Each line
+of the sequence file corresponds to one sequence.  The line starts with the
+sequence name followed by a `:', then followed by a space-separated list of
+message numbers that correspond to messages that are part of the named sequence.
+A contiguous range of messages can be represented as \*(lqlownum\-highnum\*(rq.
+.PP
+.B Sample sequence file
+.PP
+.RS 5
+.nf
+work: 3 6 8 22-33 46
+unseen: 47 49-51 54
+cur: 46
+.fi
+.RE
+.PP
+.B Nmh
+commands that modify the sequence file will silently remove sequences for
+nonexistent messages when the sequence file is updated.  The exception to
+this is the \*(lqcur\*(rq sequence, which is allowed to point to a
+nonexistent message.
+.SS Sequence File Locking
+The \*(lqdatalocking\*(rq profile entry controls the type of locking used
+when reading and writing sequence files.  The locking mechanisms supported
+are detailed in
+.IR mh\-profile (5).
+This protects sequence file integrity when multiple
+.B nmh
+commands are run simultaneously.
+.B Nmh
+commands that modify the sequence file use transactional locks; the lock
+is held from the time the sequence file is read until it it written out.
+This ensures that modifications to the sequence file will not be lost
+if multiple commands are run simultaneously.  Long-running
+.B nmh
+commands, such as
+.B inc
+and
+.BR pick ,
+will release the sequence lock during the bulk of their runtime and reread
+the sequence file after their processing is complete to reduce lock
+contention time.
+.PP
+Note:
+Currently transactional locks are only supported for public sequences;
+private sequences will not get corrupted, but the possibility exists that two
+.B nmh
+commands run simultaneously that add messages to a private sequence could result in
+one command's messages not appearing on the requested sequence.
+.SH FILES
+.PD 0
+.TP 20
+$HOME/.mh\-profile
+The user's profile.
+.TP 20
+<mh-dir>/context
+The user's context.
+.TP 20
+<folder>/.mh\-sequences
+File for public sequences.
+.PD
+.SH "PROFILE COMPONENTS"
+.PD 0
+.TP 20
+mh-sequences:
+Name of file to store public sequences.
+.TP 20
+Sequence\-Negation:
+To designate messages not in a sequence.
+.TP 20
+Previous\-Sequence:
+The last message specification given.
+.TP 20
+Unseen\-Sequence:
+Those messages not yet seen by the user.
+.PD
+.SH "SEE ALSO"
+.IR flist (1),
+.IR mark (1),
+.IR pick (1),
+.IR mh-profile (5)
+.SH DEFAULTS
+None

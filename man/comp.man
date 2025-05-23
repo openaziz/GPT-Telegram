@@ -1,0 +1,319 @@
+.TH COMP %manext1% 2022-12-22 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+comp \- compose an nmh message
+.SH SYNOPSIS
+.HP 5
+.na
+.B comp
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msg ]
+.RB [ \-form
+.IR formfile ]
+.RB [ \-use " | " \-nouse ]
+.RB [ \-file
+.IR file ]
+.RB [ \-draftfolder
+.IR +folder ]
+.RB [ \-draftmessage
+.IR msg ]
+.RB [ \-nodraftfolder ]
+.RB [ \-editor
+.IR editor ]
+.RB [ \-noedit ]
+.RB [ \-width
+.IR columns ]
+.RB [ \-from
+.IR address ]
+.RB [ \-to
+.IR address ]
+.RB [ \-cc
+.IR address ]
+.RB [ \-fcc
+.IR +folder ]
+.RB [ \-subject
+.IR text ]
+.RB [ \-whatnowproc
+.IR program ]
+.RB [ \-nowhatnowproc ]
+.RB [ \-build ]
+.ad
+.SH DESCRIPTION
+.B comp
+is used to create a new message to be mailed.  It copies a
+message form to the draft being composed and then invokes an editor on
+the draft (unless
+.B \-noedit
+is given, in which case the initial edit is suppressed).
+.PP
+The default message template \*(lqcomponents\*(rq will direct
+.B comp
+to construct the message draft as follows:
+.PP
+.RS 5
+.nf
+From: {from switch} or <Local-Mailbox> or <username@hostname>
+To: {to switch} or blank
+cc: {cc switch} or blank
+Fcc: {fcc switch} or +outbox
+Subject: {subject switch} or blank
+--------
+.fi
+.RE
+.PP
+If a file named
+.RI \*(lq components \*(rq
+exists in the user's nmh directory,
+it will be used instead of this form.  You may specify an alternate
+forms file with the switch
+.B \-form
+.IR formfile .
+.PP
+You may also start
+.B comp
+using the contents of an existing message
+as the form.  If you supply either a
+.I +folder
+or
+.I msg
+argument, that
+message will be used as the message form.  You may not supply both a
+.B \-form
+.I formfile
+and a
+.I +folder
+or
+.I msg
+argument.  The line of
+dashes or a blank line must be left between the header and the body of
+the message for the message to be identified properly when it is sent
+(see
+.IR send (1)).
+.PP
+The switch
+.B \-use
+directs
+.B comp
+to continue editing an already
+started message.  That is, if a
+.B comp
+(or
+.BR dist ,
+.BR repl ,
+or
+.BR forw )
+is terminated without sending the draft, the draft can
+be edited again via
+.RB \*(lq comp
+.BR \-use \*(rq.
+.PP
+The
+.B \-file
+.I file
+switch says to use the named file as the message draft.
+.PP
+Forms that are selected via the
+.B \-form
+switch are processed via the
+.B nmh
+template system; see
+.IR mh\-format (5)
+for details.  Drafts constructed from another message or with the
+.B \-use
+or
+.B \-file
+switches will
+.I not
+be processed with
+.IR mh\-format (5).
+.PP
+In addition to the standard
+.IR mh\-format (5)
+escapes,
+the following
+.I component
+escapes are either new or have an alternate meaning:
+.PP
+.RS 5
+.nf
+.ta \w'Escape  'u +\w'Returns  'u
+.I "Escape	Returns	Description"
+fcc	string	Any folders specified with `\-fcc\ folder'
+from	string	Any addresses specified with `\-from\ address'
+to	string	Any addresses specified with `\-to\ address'
+cc	string	Any addresses specified with `\-cc\ address'
+subject	string	Any text specified with `\-subject\ text'
+.fi
+.RE
+.PP
+By default the \*(lqTo:\*(rq and \*(lqcc:\*(rq fields are empty.  You may
+add addresses to these fields with the
+.B \-to
+.I address
+and
+.B \-cc
+.I address
+switches.  You may give these switches multiple times to add multiple
+addresses.
+.PP
+By default the \*(lqFrom:\*(rq field has either the value of the
+.B Local\-Mailbox
+profile entry or a system default email address.  This default can be
+overridden by using the
+.B \-from
+.I address
+switch.  The default mailbox in the \*(lqFcc:\*(rq field is
+.IR +outbox .
+This can be overridden by the
+.B \-fcc
+switch.
+.PP
+Any text you give to the
+.B \-subject
+switch will be placed in the \*(lqSubject:\*(rq field in the draft.
+.PP
+If the draft already exists,
+.B comp
+will ask you as to the disposition
+of the draft.  A reply of
+.B quit
+will abort
+.BR comp ,
+leaving the draft intact;
+.B replace
+will replace the existing draft with
+the appropriate form;
+.B list
+will display the draft;
+.B use
+will use the draft for further composition; and
+.B refile
+.I +folder
+will file the draft in the given folder, and give you a new draft with the
+appropriate form.  (The
+.I +folder
+argument to
+.B refile
+is required.)
+.PP
+The
+.B \-draftfolder
+.I +folder
+and
+.B \-draftmessage
+.I msg
+switches invoke the
+.B nmh
+draft folder facility.  This is an advanced (and highly
+useful) feature.  Consult
+.IR mh-draft (5)
+for more information.
+.PP
+The
+.B \-editor
+.I editor
+switch indicates the editor to use for the
+initial edit.  Upon exiting from the editor,
+.B comp
+will invoke the
+.B whatnow
+program (see
+.IR whatnow (1)
+for a discussion of
+available options).  The invocation of this program can be inhibited
+by using the
+.B \-nowhatnowproc
+switch.  (In fact, it is the
+.I whatnow
+program which starts the initial edit.  Hence,
+.B \-nowhatnowproc
+will prevent any edit from occurring.)
+.PP
+The
+.B \-build
+switch is intended to be used by the Emacs mh-e interface to
+.BR nmh .
+It implies
+.BR \-nowhatnowproc .
+It causes a file <mh-dir>/draft to be created, containing the draft message that
+would normally be presented to the user for editing.
+No mail is actually sent.
+.SH FILES
+.PD 0
+.TP 20
+%nmhetcdir%/components
+The default message skeleton.
+.TP
+<mh-dir>/components
+The user's message skeleton.
+.TP
+$HOME/.mh_profile
+The user's profile.
+.PD
+.SH "PROFILE COMPONENTS"
+.PD 0
+.TP 20
+Path:
+To determine the user's nmh directory.
+.TP
+Draft\-Folder:
+To specify the default draftfolder.
+.TP
+Editor:
+To override the default editor.
+.TP
+Msg\-Protect:
+To set mode when creating a new message (draft).
+.TP
+fileproc:
+Program to refile the message.
+.TP
+whatnowproc:
+Program to ask the \*(lqWhat now?\*(rq questions
+.PD
+.SH "SEE ALSO"
+.IR dist (1),
+.IR forw (1),
+.IR repl (1),
+.IR send (1),
+.IR whatnow (1),
+.IR mh\-draft (5),
+.IR mh\-profile (5)
+.SH DEFAULTS
+.PD 0
+.TP 20
++folder
+The current folder.
+.TP
+msg
+The current message.
+.TP
+\-nodraftfolder
+.TP
+\-nouse
+.PD
+.SH CONTEXT
+None
+.SH BUGS
+If
+.I whatnowproc
+is
+.BR whatnow ,
+then
+.B comp
+uses a built-in
+.BR whatnow ,
+it does not actually run the
+.B whatnow
+program.
+Hence, if you define your own
+.IR whatnowproc ,
+don't call it
+.B whatnow
+since
+.B comp
+won't run it.

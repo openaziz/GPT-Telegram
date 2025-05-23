@@ -1,0 +1,329 @@
+.TH MH-TAILOR %manext5% 2017-02-19 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mh-tailor, mts.conf \- mail transport configuration for nmh message handler
+.SH DESCRIPTION
+The file
+.I %nmhetcdir%/mts.conf
+defines run-time options for those
+.B nmh
+programs which interact (in some form) with the message transport system.
+At present, these (user) programs are:
+.BR ap ,
+.BR inc ,
+.BR msgchk ,
+.BR post ,
+.BR rcvdist ,
+and
+.BR rcvpack .
+.PP
+Each option should be given on a single line.  Blank lines and lines
+which begin with `#' are ignored.  The options available along with
+default values and a description of their meanings are listed below:
+.PP
+.BR mts :
+.RS 5
+The mail transport method to use.  The three acceptable options are
+.B smtp
+(which is the default),
+.BR sendmail/smtp ,
+and
+.BR sendmail/pipe .
+.PP
+If you use
+.BR smtp ,
+this will enable a direct SMTP interface in
+.BR nmh .
+When sending mail, instead of passing the message to the mail
+transport agent,
+.B post
+will open a socket connection to the mail port on the machine
+specified in the
+.B servers
+entry.
+.PP
+If you use
+.BR sendmail/smtp ,
+then
+.B post
+will send messages by forking a local copy of
+.BR sendmail .
+It will still speak SMTP with this local copy of
+.BR sendmail .
+For backward compatibility,
+.B sendmail/smtp
+can be abbreviated to
+.BR sendmail .
+.PP
+The third alternative,
+.BR sendmail/pipe ,
+also forks a local copy of
+.B sendmail
+but feeds the message directly to it, using
+.B sendmail
+.BR \-t .
+This replaces the old, undocumented
+.B spost
+mechanism and retains some of its limitations, such as lack of
+support for the \*(lqDcc:\*(rq header field, as described in the
+.B send
+and
+.B post
+manual pages.
+.RE
+.PP
+.BR localname :
+.RS 5
+The hostname
+.B nmh
+considers local.  It should typically be a fully qualified hostname.
+If this is not set, depending on the version of Unix you're running,
+.B nmh
+will query the system for this value (e.g.\& uname, gethostname, etc.),
+and attempt to fully qualify this value.
+.PP
+If you are using POP to retrieve new messages, you may want to set this
+value to the name of the POP server, so that outgoing messages appear to
+have originated on the POP server.
+.RE
+.PP
+.BR localdomain :
+.RS 5
+If this is set, a `.' followed by this string will be appended to your
+hostname.
+.PP
+This should only be needed, if for some reason
+.B nmh
+is not able to fully qualify the hostname returned by the system
+(e.g.\& uname, gethostname, etc.).
+.RE
+.PP
+.BR clientname :
+.RS 5
+This option specifies the host name that
+.B nmh
+will give in the SMTP
+.B HELO
+(and
+.BR EHLO )
+command, when posting mail.  If not set, the default is to use the
+host name that
+.B nmh
+considers local (see
+.B localname
+above).  If this option is set, but empty, no
+.B HELO
+command will be given.
+.PP
+Although the
+.B HELO
+command is required by RFC 821, many SMTP servers do not require it.
+Early versions of
+.I SendMail
+will fail if the hostname given in the
+.B HELO
+command is the local host.  Later versions of
+.I SendMail
+will complain if you omit the
+.B HELO
+command.  If you run
+.IR SendMail ,
+find out what your system expects and set this field if needed.
+.RE
+.PP
+.BR systemname :
+.RS 5
+This option is only used for UUCP mail.  It specifies the name of the
+local host in the UUCP \*(lqdomain\*(rq.  If not set, depending
+on the version of Unix you're running,
+.B nmh
+will query the system
+for this value.  This has no equivalent in the
+.B nmh
+configuration
+file.
+.RE
+.PP
+.BR mmdfldir :
+%mailspool%
+.RS 5
+The directory where mail drops are kept.  If this option is set, but empty,
+the user's home directory is used.  This overrides the default value
+chosen at the time of compilation.
+.RE
+.PP
+.BR mmdflfil :
+.RS 5
+The name of the mail drop file in the directory where mail drops are kept.
+If this is empty, the user's login name is used.  This overrides the default
+value (which is empty).
+.RE
+.PP
+.BR spoollocking :
+%default_locking%
+.RS 5
+The locking algorithm to use when opening the mail drop.  Can be any one of
+the following:
+.PP
+.RS 5
+.nf
+%supported_locks%
+.fi
+.RE
+.RE
+.PP
+.BR maildelivery :
+%nmhlibexecdir%/maildelivery
+.RS 5
+The name of the system-wide default
+.I maildelivery
+file.
+See
+.IR slocal (1)
+for the details.
+.RE
+.SS "SMTP support"
+This option is only available if you set
+.B mts
+to
+.BR smtp .
+.PP
+.BR servers :
+localhost
+.RS 5
+A single hostname to be used when performing mail submission via SMTP.
+Previous versions of
+.B nmh
+supported multiple hostnames for
+.BR servers ,
+but the current version of
+.B nmh
+only supports a single entry (the name is kept for backwards compatibility
+reasons).  This can be overridden via the
+.B \-server
+switch to
+.IR send (1).
+It is not possible to change the mail submission port number in the
+.B servers
+entry; see the
+.B \-port
+switch to
+.IR send (1)
+for this functionality.
+.SS "SendMail"
+This option is only available if you set
+.B mts
+to
+.B sendmail/smtp
+or
+.BR sendmail/pipe .
+.PP
+.BR sendmail :
+%sendmailpath%
+.RS 5
+The pathname to the
+.B sendmail
+program.
+.RE
+.SS "Post Office Protocol"
+.BR pophost :
+.RS 5
+The name of the default POP service host.  If this is not set, then
+.B nmh
+looks in the standard mail drop areas for waiting mail, otherwise
+the named POP service host is consulted.
+.RE
+.\"  .SS "BBoards Delivery"
+.\"  This option is only available if you compiled \fInmh\fP with
+.\"  \*(lqbbdelivery:\ on\*(rq.
+.\"  .PP
+.\"  .BR bbdomain :
+.\"  .RS 5
+.\"  The local BBoards domain (a UCI hack).
+.\"  .RE
+.\"  .SS "BBoards & The POP"
+.\"  These options are only available if you compiled \fInmh\fP with
+.\"  \*(lqbboards:\ pop\*(rq and \*(lqpop:\ on\*(rq.
+.\"  .PP
+.\"  .BR popbbhost :
+.\"  .RS 5
+.\"  The POP service host which also acts as a BBoard server.  This variable
+.\"  should be set on the POP BBoards client host.
+.\"  .RE
+.\"  .PP
+.\"  .BR popbbuser :
+.\"  .RS 5
+.\"  The guest account on the POP/BB service host.  This should be a different
+.\"  login ID than either the POP user or the BBoards user.  (The user-id
+.\"  \*(lqftp\*(rq is highly recommended.)  This variable should be set on
+.\"  both the POP BBoards client and service hosts.
+.\"  .RE
+.\"  .PP
+.\"  .BR popbblist :
+.\"  %nmhetcdir%/hosts.popbb
+.\"  .RS 5
+.\"  A file containing of lists of hosts that are allowed to use the POP
+.\"  facility to access BBoards using the guest account.  If this file is not
+.\"  present, then no check is made.  This variable should be set on the POP
+.\"  BBoards service host.
+.\"  .RE
+.SS "File Locking"
+A few words on locking:
+.B nmh
+has two main uses for locking: locking the mail spool during mail
+incorporation, and locking metadata files (sequence files, the context)
+during updates.  These locking methods can be configured separately
+from each other.
+.PP
+For locking the mail spool, the
+.B spoollocking
+entry in
+.IR mh\-tailor (5)
+will control the locking algorithm to use when
+.B inc
+incorporates mail from the spool file.  If no entry is given, a default
+based on the operating system type will be chosen.
+.PP
+For locking all other files, the
+.B datalocking
+entry in
+.IR mh-profile (5)
+controls the locking algorithm used for all other file access.
+If no entry is given, the
+.B fcntl
+lock method will be chosen.
+.PP
+If you do not wish to use kernel-based locking,
+.I dot
+locking is an option available.  If \*(lq--enable-lockdir=directory\*(rq
+is not specified at build time, lock files will be created in the
+directory where the file being locked resides.  Otherwise, lock
+files will be created in the directory specified by
+\*(lq--enable-lockdir\*(rq.
+.PP
+Prior to installing
+.BR nmh ,
+you should see how locking is done at your site, and set the appropriate values.
+.SH FILES
+.TP 20
+%nmhetcdir%/mts.conf
+nmh mts configuration file
+.SH "PROFILE COMPONENTS"
+None
+.SH "SEE ALSO"
+.IR mh\-mts (8),
+.IR post (8)
+.IR send (8)
+.SH DEFAULTS
+As listed above.  The path of the mail transport configuration file can
+be changed with the MHMTSCONF environment variable and augmented with the
+MHMTSUSERCONF environment variable, see
+.IR mh\-profile (5).
+.SH BUGS
+Failure to open any mail transport configuration file is silently
+ignored.  Therefore, it's best to avoid dynamic creation of such
+a file with the intent of use via the MHMTSCONF or MHMTSUSERCONF
+environment variables.  If such use is necessary, the ability
+to successfully open the file should first be verified.

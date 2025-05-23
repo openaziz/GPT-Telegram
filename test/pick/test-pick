@@ -1,0 +1,284 @@
+#!/bin/sh
+######################################################
+#
+# Test pick
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+# Add an 11th message.
+sed \
+  -e 's/10/11/g' \
+  -e 's/^To:\(.*\)/To:\1\
+Cc: <another@example.com>/' \
+  -e 's/^\(Date:.*\)2006\( 00:00:\)00/\12008\200\
+Delivery-Date: \12009\241/' \
+  $MH_TEST_DIR/Mail/inbox/10 >$MH_TEST_DIR/Mail/inbox/11
+
+# Test message specification.
+run_test 'pick first last' '1
+11'
+
+# Test -and.
+run_test 'pick -subject message.3 -and -from Test3' '3'
+run_test 'pick -subject message.3 -and -from Test4' \
+         'pick: no messages match specification
+0'
+
+# Test -or.
+run_test 'pick -subject message.3 -or -from Test3' '3'
+run_test 'pick -subject message.3 -or -from Test4' '3
+4'
+
+# Test -not.
+run_test 'pick -not -subject message.8 last:5' '7
+9
+10
+11'
+
+# Test -reverse.
+run_test 'pick -reverse -not -subject message.8 last:5' '11
+10
+9
+7'
+
+# Test -lbrace, -rbrace.
+run_test 'pick -subject message.12 -and -subject message.3 -or -from Test4' '4'
+run_test 'pick -subject message.12 -and -lbrace -subject message.3 -rbrace' \
+         'pick: no messages match specification
+0'
+
+# -and takes precedence over -or.
+run_test 'pick -subject message.12 -or -subject message.3 -and -from Test3' '3'
+run_test 'pick -subject message.12 -or -subject message.3 -and -from Test4' \
+         'pick: no messages match specification
+0'
+
+# -not takes precedence over -and.
+run_test 'pick -not -subject message.12 -and -subject message.3' '3'
+run_test 'pick -not -lbrace -subject NoMatch -and -subject message.3 -rbrace' \
+         '1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11'
+
+# Test -debug.
+run_prog pick -debug -not -lbrace -subject NoMatch -and -subject message.3 \
+  -rbrace >/dev/null 2>"$actual"
+cat >"$expected" <<EOF
+NOT
+| AND
+| | PATTERN(header) ^subject[ 	]*:.*NoMatch
+| | PATTERN(header) ^subject[ 	]*:.*message.3
+EOF
+check "$expected" "$actual"
+
+set +e
+
+# Produce 0 if no messages match and standard output is not a tty.
+# Note that there is an error message on stderr, but it's redirected
+# to /dev/null here.
+echo \
+  `run_prog pick -subject message.3 -and -from Test4 >"$actual" 2>/dev/null` \
+  >/dev/null
+cat >"$expected" <<EOF
+0
+EOF
+check "$expected" "$actual"
+
+if test -t 1  &&  (printf '' >/dev/tty) 2>/dev/null; then
+  # Produce no standard output if no messages match and standard
+  # output is a tty.  To test that even when run with stdout
+  # detached, write directly to /dev/tty.  Can't capture the
+  # output so hopefully the user will notice it.
+  run_prog pick -subject message.3 -and -from Test4 >/dev/tty 2>/dev/null
+fi
+
+# Also, check that the exit status is 1.
+run_prog pick -subject message.3 -and -from Test4 >/dev/null 2>&1
+run_test "echo $?" '1'
+
+set -e
+
+# Test -cc.
+run_test 'pick -cc another' '11'
+
+# Test -date.
+run_test 'pick -date 29.Sep.2008' '11'
+
+# Test -from.
+run_test 'pick -from test7' '7'
+
+# Test -search.
+run_test 'pick -search This.is.message.number.[456]' '4
+5
+6'
+
+# Test -subject.
+run_test 'pick -subject message.2' '2'
+
+# Test -to.
+run_test 'pick -to some -nolist' '11 hits'
+run_test 'pick -to user@example.com -nolist' '11 hits'
+
+# Test -after.
+run_prog pick -after '28 Sep 2008 00:00:00' >"$actual" 2>&1
+cat >"$expected" <<EOF
+11
+EOF
+check "$expected" "$actual"
+
+# Invert exit status so execution doesn't terminate due to -e.
+set +e
+run_prog pick -after '29 Sep 2008 00:00:00' >"$actual" 2>/dev/null
+set -e
+cat >"$expected" <<EOF
+0
+EOF
+check "$expected" "$actual"
+
+# Test -before.  While -after doesn't include the specified date, -before does.
+run_prog pick -before '29 Sep 2008 00:00:01' last:3 >"$actual" 2>&1
+cat >"$expected" <<EOF
+9
+10
+11
+EOF
+check "$expected" "$actual"
+run_prog pick -before '28 Sep 2008 00:00:00:' last:3 >"$actual" 2>&1
+cat >"$expected" <<EOF
+9
+10
+EOF
+check "$expected" "$actual"
+set +e
+run_prog pick -before '28 Sep 2006 00:00:00' last:3 >"$actual" 2>/dev/null
+set -e
+cat >"$expected" <<EOF
+0
+EOF
+check "$expected" "$actual"
+
+# Test -datefield.
+set +e
+run_prog pick -datefield date -after '29 Sep 2008 00:00:00' \
+  >"$actual" 2>/dev/null
+set -e
+cat >"$expected" <<EOF
+0
+EOF
+check "$expected" "$actual"
+run_prog pick -datefield delivery-date -after '29 Sep 2008 00:00:00' \
+  >"$actual" 2>&1
+cat >"$expected" <<EOF
+11
+EOF
+check "$expected" "$actual"
+
+# Test sequence creation.
+run_test 'pick 2 4 6 8 10 -sequence even' '5 hits'
+run_test 'mark -s even -list' 'even: 2 4 6 8 10'
+
+# Test private sequence creation.
+# Set current message for following tests.
+folder +inbox 1 > /dev/null
+run_test 'pick -date 29.Sep.2008 -sequence privateseq -nopublic' '1 hit'
+run_test 'mark -list' 'cur: 1
+even: 2 4 6 8 10
+privateseq (private): 11'
+
+# Test add to private sequence.
+run_test 'pick first -sequence privateseq -nozero -nopublic' '1 hit'
+run_test 'mark -list' 'cur: 1
+even: 2 4 6 8 10
+privateseq (private): 1 11'
+
+# Test sequence creation, with -list.
+run_test 'pick 5 7 -sequence odd -list' '5
+7'
+run_test 'mark -s odd -list' 'odd: 5 7'
+
+# Test sequence creation, with default of -zero.
+run_test 'pick 1 3 -sequence odd' '2 hits'
+run_test 'mark -s odd -list' 'odd: 1 3'
+
+# Test sequence creation, with -nozero.
+run_test 'pick  5 7 9 -sequence odd -nozero' '3 hits'
+run_test 'mark -s odd -list' 'odd: 1 3 5 7 9'
+
+# Test sequence creation, with explicit folder, -public, and -zero.
+run_test 'pick +inbox 5 7 9 11 -public -sequence odd' '4 hits'
+run_test 'mark -s odd -list' 'odd: 5 7 9 11'
+
+# Test -nolist.
+run_test 'pick all -nolist' '11 hits'
+
+# Test unfolding of multi-line header fields: it should only
+# remove embedded newlines.
+cat >"$MH_TEST_DIR/Mail/inbox/12" <<EOF
+From: Test12 <test12@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 12@test.nmh
+Subject: multi-line
+ header field
+
+This is message number 12
+EOF
+
+echo 12 >"$expected"
+
+run_prog pick -subject 'multi-line header field' 12 >"$actual" 2>&1
+check "$expected" "$actual"
+
+# Test MIME-encoded header.
+cat >"$MH_TEST_DIR/Mail/inbox/13" <<EOF
+From: Test13 <test13@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 13@test.nmh
+Subject: =?us-ascii?q?=66=6f=6f?=
+ =?utf-8?q?=62=61=72?=
+
+This is message number 13, with MIME-encoded Subject "foobar".
+EOF
+
+echo 13 >"$expected"
+
+set +e
+
+require_locale $en_locales
+# Don't use run_prog here because it loses the environment setting.
+pick -subject foobar 13 >"$actual" 2>&1
+set -e
+check "$expected" "$actual"
+
+# Test -nosequence.
+run_test 'pick +inbox 5 7 9 11 -sequence test -nosequence' '5
+7
+9
+11'
+run_test 'mark -list -sequence test' 'test: '
+
+
+exit $failed

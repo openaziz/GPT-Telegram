@@ -1,0 +1,231 @@
+#!/bin/sh
+######################################################
+#
+# Test rcvstore
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# Use proper program, likely not the first one on PATH.
+rcvstore="${MH_LIBEXEC_DIR}/rcvstore"
+
+check_exit '-eq 1' $rcvstore -
+
+expected=$MH_TEST_DIR/$$.expected
+expected_err=$MH_TEST_DIR/$$.expected_err
+actual=$MH_TEST_DIR/$$.actual
+actual_err=$MH_TEST_DIR/$$.actual_err
+
+
+# check -help
+start_test "-help"
+cat >$expected <<EOF
+Usage: rcvstore [+folder] [switches]
+  switches are:
+  -[no]create
+  -[no]unseen
+  -[no]public
+  -[no]zero
+  -sequence name
+  -version
+  -help
+EOF
+
+#### Skip nmh intro text.
+run_prog "$rcvstore" -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `$rcvstore -v` in
+  rcvstore\ --*) ;;
+  *            ) printf '%s: rcvstore -v generated unexpected output\n' "$0" >&2
+                 failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test "unknown switch"
+run_test "$rcvstore -nonexistent" 'rcvstore: -nonexistent unknown'
+
+# check with no switches and zero-length input message
+start_test "with no switches and zero-length input message"
+cat >$expected <<EOF
+rcvstore: empty file
+EOF
+
+run_prog $rcvstore </dev/null >$actual 2>&1
+check $expected $actual
+
+# check with no switches
+start_test "with no switches"
+cat >$expected <<EOF
+EOF
+run_prog $rcvstore <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check + of existing folder
+start_test "+ of existing folder"
+run_prog $rcvstore +inbox <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check + of new folder
+start_test "+ of new folder"
+run_prog $rcvstore +newfolder <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/newfolder/1" \
+  'keep first'
+rmdir "${MH_TEST_DIR}/Mail/newfolder"
+
+# check -nocreate
+start_test "-nocreate"
+cat >$expected_err <<EOF
+rcvstore: folder ${MH_TEST_DIR}/Mail/newfolder doesn't exist
+EOF
+
+set +e
+run_prog $rcvstore +newfolder -nocreate <${MH_TEST_DIR}/Mail/inbox/1 >$actual \
+  2>$actual_err
+set -e
+check $expected $actual 'keep first'
+check $expected_err $actual_err
+
+# check -create
+start_test "-create"
+run_prog $rcvstore +newfolder -nocreate -create <${MH_TEST_DIR}/Mail/inbox/1 \
+  >$actual 2>&1
+check $expected $actual 'keep first'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/newfolder/1" \
+  'keep first'
+rmdir "${MH_TEST_DIR}/Mail/newfolder"
+
+# check addition to unseen sequence
+start_test "addition to unseen sequence"
+printf 'Unseen-Sequence: unseen\n' >> $MH
+run_prog $rcvstore <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence unseen -list' 'unseen: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+#### Need to clear the unseen sequence.
+touch "${MH_TEST_DIR}/Mail/inbox/11"
+rmm 11
+
+# check -nounseen
+start_test "-nounseen"
+run_prog $rcvstore -nounseen <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence unseen -list' 'unseen: '
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -unseen
+start_test "-unseen"
+run_prog $rcvstore -nounseen -unseen <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence unseen -list' 'unseen: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -sequence
+start_test "-sequence"
+run_prog $rcvstore -sequence newseq <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence newseq -list' 'newseq: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check that default is -nozero
+start_test "that default is -nozero"
+mark -sequence newseq all
+run_prog $rcvstore -sequence newseq <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence newseq -list' 'newseq: 1-11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -zero
+start_test "-zero"
+mark -sequence newseq all
+run_prog $rcvstore -sequence newseq -zero \
+  <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence newseq -list' 'newseq: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -nozero
+start_test "-nozero"
+mark -sequence newseq all
+run_prog $rcvstore -seq newseq -zero -nozero \
+  <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence newseq -list' 'newseq: 1-11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check that default is -public
+start_test "that default is -public"
+run_prog $rcvstore -sequence pubseq <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence pubseq -list' 'pubseq: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -nopublic
+start_test "-nopublic"
+run_prog $rcvstore -sequence privseq -nopublic \
+  <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence privseq -nopublic -list' 'privseq (private): 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -public
+start_test "-public"
+run_prog $rcvstore -sequence pubseq -nopublic -public \
+  <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test 'mark -sequence pubseq -public -list' 'pubseq: 11'
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+#### Windows FAT filesystems don't support file permissions that
+#### disallow read access, and chmod doesn't fail.  If a test above
+#### has failed, report that failure.  Otherwise, report that we're
+#### skipping the remainer of the test if chmod can't remove read
+#### permission.
+printf '\n' >${MH_TEST_DIR}/Mail/test-read-perms
+chmod 600 ${MH_TEST_DIR}/Mail/test-read-perms
+if [ "`find ${MH_TEST_DIR}/Mail/test-read-perms -perm 600`"x = ''x ]; then
+  if [ ${failed:-0} -eq 0 ]; then
+    echo "$Test $0 SKIP (cannot remove read permission on plain files)"
+    exit 77
+  fi
+  exit $failed
+fi
+rm -f ${MH_TEST_DIR}/Mail/test-read-perms
+
+# check default Msg-Protect
+start_test "default Msg-Protect"
+msgprot=`mhparam msgprot`
+run_prog $rcvstore <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual 'keep first'
+run_test "find ${MH_TEST_DIR}/Mail/inbox/11 -perm $msgprot" \
+  "${MH_TEST_DIR}/Mail/inbox/11"
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check Msg-Protect profile entry
+start_test "Msg-Protect profile entry"
+msgprot=640
+printf 'Msg-Protect: %s\n' "$msgprot" >>$MH
+run_prog $rcvstore <${MH_TEST_DIR}/Mail/inbox/1 >$actual 2>&1
+check $expected $actual
+run_test "find ${MH_TEST_DIR}/Mail/inbox/11 -perm $msgprot" \
+  "${MH_TEST_DIR}/Mail/inbox/11"
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11"
+
+
+finish_test
+exit ${failed:-0}

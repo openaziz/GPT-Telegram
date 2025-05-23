@@ -1,0 +1,101 @@
+#!/bin/sh
+#
+# Test of various (well, start with one) function escapes.
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+mhl="${MH_LIBEXEC_DIR}/mhl"
+
+MHLDEBUG=foo check_exit '-eq 1' "$mhl" -
+unset MHLDEBUG
+check_exit '-eq 1' "$mhl" -xyzzy
+check_exit '-eq 0' "$mhl" -help
+check_exit '-eq 0' "$mhl" -version
+check_exit '-eq 1' "$mhl" -bell -nobell -clear -
+check_exit '-eq 1' "$mhl" -folder
+check_exit '-eq 1' "$mhl" -folder + -
+check_exit '-eq 1' "$mhl" -form
+check_exit '-eq 1' "$mhl" -sleep
+check_exit '-eq 1' "$mhl" -sleep 42 -
+check_exit '-eq 1' "$mhl" -moreproc foo -moreproc
+check_exit '-eq 1' "$mhl" -nofmtproc -fmtproc foo -fmtproc
+check_exit '-eq 1' "$mhl" -length 42 -length
+check_exit '-eq 1' "$mhl" -length 0
+check_exit '-eq 1' "$mhl" -width
+check_exit '-eq 1' "$mhl" -digest foo -width 0
+check_exit '-eq 1' "$mhl" -issue 42 -digest
+check_exit '-eq 1' "$mhl" -issue
+check_exit '-eq 1' "$mhl" -volume 42 -issue 0
+check_exit '-eq 1' "$mhl" -volume
+check_exit '-eq 1' "$mhl" -forwall -volume 0
+check_exit '-eq 0' "$mhl" -dashstuffing -nodashstuffing \
+    -forwall </dev/null
+check_exit '-eq 0' "$mhl" -forwall -digest foo \
+    -bell -length 1 -width 1 </dev/null
+check_exit '-eq 0' "$mhl" -forwall -digest foo \
+    -nobell -volume 1 -clear </dev/null
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+cat >`mhpath new` <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: recipient@example.com
+Subject: message with blank lines and trailing spaces
+Date: Mon, 29 Apr 2013 11:51:45 -0400
+
+There are two blank lines below.  And there is a trailing space: 
+And another trailing space: 
+
+
+EOF
+
+
+# check nortrim (default), and that trailing whitespace in a
+start_test "nortrim (default), and that trailing whitespace in a"
+# component is trimmed when filtering blank lines
+cat >"$expected" <<EOF
+> There are two blank lines below.  And there is a trailing space: 
+> And another trailing space: 
+>
+>
+EOF
+
+cat >"$MH_TEST_DIR/test.format" <<EOF
+body:component="> "
+EOF
+
+"$mhl" -nomoreproc -form "$MH_TEST_DIR/test.format" `mhpath last` >"$actual"
+check "$expected" "$actual"
+
+
+# check rtrim
+start_test "rtrim"
+cat >"$expected" <<EOF
+> There are two blank lines below.  And there is a trailing space:
+> And another trailing space:
+>
+>
+EOF
+
+cat >"$MH_TEST_DIR/test.format" <<EOF
+body:component="> ",rtrim
+EOF
+
+"$mhl" -nomoreproc -form "$MH_TEST_DIR/test.format" `mhpath last` >"$actual"
+check "$expected" "$actual"
+
+
+rm -f "$MH_TEST_DIR/test.format"
+
+finish_test
+exit $failed

@@ -1,0 +1,170 @@
+#!/bin/sh
+#
+# Test post -messageid
+#
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "${MH_OBJ_DIR}/test/common.sh"
+
+setup_test
+testname="${MH_TEST_DIR}/$$"
+
+
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+
+This is a test
+EOF
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<nobody@example.com>
+RCPT TO:<somebody@example.com>
+DATA
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+
+This is a test
+.
+QUIT
+EOF
+
+# check invalid -messageid selection
+start_test "invalid -messageid selection"
+run_test "send -draft -messageid invalid" \
+"post: unsupported messageid \"invalid\"
+send: message not delivered to anyone"
+
+#### Rely on sendmail/pipe below to override default mts.
+mts_fakesendmail="${MHMTSCONF}-fakesendmail"
+cp "${MHMTSCONF}" "$mts_fakesendmail"
+printf 'sendmail: %s/test/fakesendmail\n' "$srcdir" >>"$mts_fakesendmail"
+MHMTSCONF="$mts_fakesendmail"
+
+# $1: -messageid switch selection
+# arguments: expected output(s)
+test_messageid ()
+{
+  msgid_style="$1"
+  run_prog send -draft -mts sendmail/pipe -msgid -messageid "$msgid_style"
+  shift
+
+  # fakesendmail drops the message and any cc's into this mbox.
+  mbox="${MH_TEST_DIR}"/Mail/fakesendmail.mbox
+  inc -silent -file "$mbox"
+  rm -f "$mbox"
+
+  n=1
+  for expected in "$@"; do
+    cur=`mhpath cur`
+    # Verify that Message-ID is of the right form.  We'll see how
+    # portable these grep regular expressions are.
+    case $msgid_style in
+      localname)
+        # e.g., Message-ID: <5348.1342884222@localhost.localdomain>
+        id='^Message-ID: <[0-9]\{1,\}\.[0-9]\{1,\}@'
+        ;;
+      random)
+        # e.g., Message-ID: <5364-1342884222.165897@ldYM.FXwU.bBqK>
+        id='^Message-ID: <[0-9]\{1,\}-[0-9]\{1,\}\.[0-9]\{6,6\}@[-_0-9A-Za-z]\{4,4\}\.[-_0-9A-Za-z]\{4,4\}\.[-_0-9A-Za-z]\{4,4\}'
+        ;;
+      *) printf '%s: unexpected messageid: %s\n' "$0" "$msgid_style"; exit 1 ;;
+    esac
+
+    if grep "$id" "$cur" >/dev/null; then
+      :
+    else
+      mv "$cur" "${testname}.actual"
+      printf '%s: unexpected %s Message-ID format, see %s\n' "$0" \
+             "$msgid_style" "${testname}.actual"
+      exit 1
+    fi
+
+    #
+    # It's hard to calculate the exact Date: header post is going to
+    # use, so we'll just use sed to remove the actual date so we can easily
+    # compare it against our "correct" output.  And same for
+    # Message-ID.
+    #
+    sed -e 's/^Date:.*/Date:/' \
+        -e 's/^Message-ID:.*/Message-ID:/' \
+        "$cur" > "${testname}.actual$n"
+
+    check "${testname}.actual$n" "$expected"
+
+    if [ "$cur" != "`mhpath last`" ]; then
+      folder next >/dev/null
+      arith_eval $n + 1; n=$arith_val
+    fi
+  done
+}
+
+# check -messageid localname (the default)
+start_test "-messageid localname (the default)"
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+
+This is a test
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+Message-ID:
+
+This is a test
+.
+EOF
+
+test_messageid localname "${testname}.expected"
+
+# check -messageid random
+start_test "-messageid random"
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+
+This is a test
+.
+EOF
+
+cat > "${testname}.expected" <<EOF
+From: Mr Nobody <nobody@example.com>
+To: Somebody Else <somebody@example.com>
+Subject: Test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Date:
+Message-ID:
+
+This is a test
+.
+EOF
+
+test_messageid random "${testname}.expected"
+
+
+rm -f ${MHMTSCONF}
+
+finish_test
+exit ${failed:-0}

@@ -1,0 +1,97 @@
+#!/bin/sh
+######################################################
+#
+# Test "scan -file"
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+setup_test
+cat >"$expected" <<EOF
+   1  09/29 Test1              Testing message 1<<This is message number 1 >>
+   2  09/29 Test2              Testing message 2<<This is message number 2 >>
+   3  09/29 Test3              Testing message 3<<This is message number 3 >>
+   4  09/29 Test4              Testing message 4<<This is message number 4 >>
+   5  09/29 Test5              Testing message 5<<This is message number 5 >>
+   6  09/29 Test6              Testing message 6<<This is message number 6 >>
+   7  09/29 Test7              Testing message 7<<This is message number 7 >>
+   8  09/29 Test8              Testing message 8<<This is message number 8 >>
+   9  09/29 Test9              Testing message 9<<This is message number 9 >>
+  10  09/29 Test10             Testing message 10<<This is message number 10 >>
+EOF
+
+## Combine the inbox messages into one spool file
+
+rm -f "$MH_TEST_DIR/spoolfile"
+for i in 1 2 3 4 5 6 7 8 9 10
+do
+    printf '\1\1\1\1\n'
+    cat "$MH_TEST_DIR/Mail/inbox/$i"
+    printf '\1\1\1\1\n'
+done > "$MH_TEST_DIR/spoolfile"
+
+## Test scanning the file
+
+start_test 'scan file'
+
+run_prog scan -file "$MH_TEST_DIR/spoolfile" -width 80 >"$actual" || exit 1
+check "$expected" "$actual" 'keep first'
+
+## Test that scanning file "-" reads from stdin
+
+start_test 'scan file stdin'
+
+run_prog scan -file - <"$MH_TEST_DIR/spoolfile" -width 80 >"$actual" || exit 1
+check "$expected" "$actual" 'keep first'
+
+test -z "$MH_TEST_NOCLEANUP" && rm -f "$MH_TEST_DIR/spoolfile"
+
+## Convert the test inbox folder into a Maildir directory
+
+rm -rf "$MH_TEST_DIR/Maildir/new" "$MH_TEST_DIR/Maildir/cur"
+mkdir -p "$MH_TEST_DIR/Maildir/new" "$MH_TEST_DIR/Maildir/cur" || exit 1
+
+# move the 10 test messages into the Maildir directories
+subdir=cur
+for i in 1 2 3 4 5 6 7 8 9 10
+do
+    # split messages between subdirs, to test that "scan" sorts them correctly
+    if [ "$subdir" = cur ]; then
+        subdir=new
+        info=
+    else
+        subdir=cur
+        info=:2,
+    fi
+    arith_eval 1567890000 + "$i"; timepart=$arith_val
+    destfile=$MH_TEST_DIR/Maildir/$subdir/$timepart.P$$.testhost$info
+    mv "$MH_TEST_DIR/Mail/inbox/$i" "$destfile"
+    # Maildir sorts by mtime, so make sure all times are unique
+    [ $i -lt 10 ] && secs=0$i || secs=$i
+    touch -c -m -t "201909071600.$secs" "$destfile"
+done
+
+# should be empty now; remove it to make sure "scan -file" is not using it
+rmdir "$MH_TEST_DIR/Mail/inbox"
+
+## Test scanning the Maildir
+
+start_test 'scan file Maildir'
+
+run_prog scan -file "$MH_TEST_DIR/Maildir" -width 80 >"$actual" || exit 1
+check "$expected" "$actual"
+
+test -z "$MH_TEST_NOCLEANUP" && rm -rf "$MH_TEST_DIR/Maildir"
+
+
+finish_test
+exit "${failed:-0}"

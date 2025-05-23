@@ -1,0 +1,174 @@
+.TH MHPARAM %manext1% 2017-02-18 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhparam \- print nmh profile and context components
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhparam
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ components ]
+.RB [ \-all ]
+.RB [ \-component " | " \-nocomponent ]
+.RB [ \-debug ]
+.ad
+.SH DESCRIPTION
+.B mhparam
+writes the value of the specified profile component to the standard
+output, separated by newlines.  Component name matching is
+case-insensitive.  If the profile component is not present, the
+default value (or nothing, if there is no default) is printed.
+.PP
+If the switch
+.B \-component
+is given, then the component name is displayed along with the profile
+components value.  This can be disabled with the switch
+.BR \-nocomponent .
+.PP
+If more than one component is specified in the
+.I components
+list, then the switch
+.B \-component
+is on by default.  If only one component is specified, then the switch
+.B \-nocomponent
+is on by default.
+.PP
+If
+.B \-all
+is specified, then all components in the nmh profile are displayed
+and other arguments are ignored.
+.PP
+.B mhparam
+can provide other information, such as the
+.B nmh
+version identifier, the locations of the nmh
+.IR bindir ,
+.IR libexecdir ,
+.IR etcdir ,
+and
+.I docdir
+install directories, all
+.I proc
+settings, and the
+.I datalocking
+method described in
+.IR mh\-profile (5).
+Information about the configuration of the
+.B nmh
+installation is also available, including the default mail spool
+locking method.  To test whether the configuration includes
+support for SASL, TLS,
+.IR iconv (3),
+and oauth, the following commands, respectively, will output a non-null
+string to indicate support:
+.PP
+.RS 5
+.nf
+mhparam\0sasl
+mhparam\0tls
+mhparam\0iconv
+mhparam\0oauth
+.fi
+.RE
+.PP
+Conversely, no output means that the specified support is not included.
+The
+.B \-debug
+switch displays all such other information available from
+.BR mhparam .
+.PP
+Examples:
+.PP
+.RS 5
+.nf
+.ta \w'AliasFile:'u+2n
+$ mhparam path
+Mail
+
+$ mhparam mhlproc
+%nmhlibexecdir%/mhl
+
+$ mhparam \-component Path
+Path: Mail
+
+$ mhparam AliasFile rmmproc
+AliasFile: aliases
+rmmproc: rmmproc
+
+$ mhparam \-nocomponent AliasFile rmmproc
+aliases
+rmmproc
+
+$ mhparam path nonexistent context
+Path: Mail
+context: context
+
+$ mhparam version
+%nmhversion%
+
+$ mhparam etcdir
+%nmhetcdir%
+
+$ mhparam libexecdir
+%nmhlibexecdir%
+
+$ mhparam spoollocking
+%default_locking%
+
+$ mhparam datalocking
+fcntl
+
+$ mhparam sasl
+cyrus_sasl
+
+$ mhparam tls
+tls
+
+$ mhparam iconv
+iconv
+
+$ mhparam oauth
+oauth
+.fi
+.RE
+.PP
+.B mhparam
+is also useful in backquoted operations:
+.PP
+.RS 5
+.nf
+$ fgrep cornell.edu \`mhpath +\`/\`mhparam aliasfile\`
+.fi
+.SH "EXIT STATUS"
+The exit status is zero if all components are found,
+or one if any are missing.
+.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'ExtraBigProfileName  'u
+^$HOME/.mh_profile~^The user profile
+^or $MH~^Rather than the standard profile
+^<mh-dir>/context~^The user context
+^or $MHCONTEXT~^Rather than the standard context
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^context:~^To determine the context file
+.fi
+.SH "SEE ALSO"
+.IR mh-profile (5)
+.SH DEFAULTS
+.nf
+.RB ` \-nocomponent "' if only one component is specified"
+.RB ` \-component "' if more than one component is specified"
+.RB ` components "' defaults to none"
+.fi
+.SH CONTEXT
+None

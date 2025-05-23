@@ -1,0 +1,16 @@
+NAME="nmh"
+VERSION=1.7
+RELEASE=2
+
+CATEGORY="Mail"
+SUMMARY="A capable MIME-email-handling system with a command-line interface"
+DESCRIPTION="A capable MIME-email-handling system with a command-line interface.
+nmh is a collection of single-purpose programs that send, receive,
+show, search, and otherwise manipulate emails, including MIME.
+They combine well with other Unix programs, easing the development
+of custom shorthand commands as shell scripts.
+Optional GUI interfaces are provided by the external xmh and exmh
+projects.  nmh is a descendant of the RAND MH, Mail Handler, project."
+
+HOMEPAGE="http://savannah.nongnu.org/projects/${PN}"
+SRC_URI="http://download.savannah.nongnu.org/releases/${PN}/${P}.tar.gz"

@@ -1,0 +1,353 @@
+.TH POST %manext8% 2016-10-17 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+post \- deliver an nmh message
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/post
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-alias
+.IR aliasfile ]
+.RB [ \-filter
+.IR filterfile ]
+.RB [ \-nofilter ]
+.RB [ \-format " | " \-noformat ]
+.RB [ \-mime " | " \-nomime ]
+.RB [ \-msgid " | " \-nomsgid ]
+.RB [ \-messageid
+.IR localname " | " random ]
+.RB [ \-verbose " | " \-noverbose ]
+.RB [ \-watch " | " \-nowatch ]
+.RB [ \-width
+.IR columns ]
+.RB [ \-mts
+.IR smtp " | " sendmail/smtp " | " sendmail/pipe ]
+.RB [ \-sendmail
+.IR program ]
+.RB [ \-server
+.IR servername ]
+.RB [ \-port
+.IR portname/number ]
+.RB [ \-sasl ]
+.RB [ \-nosasl ]
+.RB [ \-saslmech
+.IR mechanism ]
+.RB [ \-user
+.IR username ]
+.RB [ \-tls ]
+.RB [ \-initialtls ]
+.RB [ \-notls ]
+.RB [ \-snoop ]
+.I file
+.ad
+.SH DESCRIPTION
+.B post
+is the default program called by
+.B send
+to deliver the message in
+.I file
+to local and remote users.
+In fact, most of the features attributed to
+.B send
+in its manual page are performed by
+.BR post ,
+with
+.B send
+acting as a relatively simple preprocessor.
+Thus, it is
+.B post
+which parses the various header fields, appends a
+\*(lqDate:\*(rq line, and interacts with the mail transport system.
+.B post
+will not normally be called directly by the user, but can be replaced
+by the user with a
+.I postproc
+profile component that will have
+.I file
+as its final argument.
+See
+.IR mh-profile (5)
+for more information on postproc.
+.PP
+.B post
+searches the \*(lqTo:\*(rq, \*(lqcc:\*(rq, \*(lqBcc:\*(rq,
+\*(lqFcc:\*(rq, and \*(lqResent\-xxx:\*(rq header lines of the specified
+message for destination addresses, checks these addresses for validity,
+and formats them so as to conform to ARPAnet Internet Message Format
+protocol, unless the
+.B \-noformat
+flag is set.  This will normally cause
+\*(lq@\fIlocal\-site\fR\*(rq to be appended to each local destination
+address, as well as any local return addresses.  The
+.B \-width
+.I columns
+switch can be used to indicate the preferred length of the header
+components that contain addresses.
+.PP
+If a \*(lqBcc:\*(rq field is encountered, its addresses will be used for
+delivery, and the \*(lqBcc:\*(rq field will be removed from the message
+sent to sighted recipients. The blind recipients will receive an entirely
+new message with a minimal set of headers. The body of this new message
+will contain a copy of the message sent to the sighted recipients, either
+marked up with the indicator text "Blind-Carbon-Copy" or encapsulated
+as a MIME digest.
+.PP
+If
+.B \-filter
+.I filterfile
+is specified, then this copy is filtered (re-formatted) by
+.B mhl
+prior to being sent to the blind recipients.
+Alternately, if the
+.B \-mime
+switch is given, then
+.B post
+will use the MIME rules for encapsulation.
+.PP
+If a \*(lqDcc:\*(rq field is encountered and the
+.B sendmail/pipe
+mail transport method is not in use, its addresses will be used for
+delivery, and the \*(lqDcc:\*(rq field will be removed from the message. The
+blind recipients will receive exactly the same message as the sighted
+recipients. *WARNING* Recipients listed in the \*(lqDcc:\*(rq field receive no
+explicit indication that they have received a \*(lqblind copy\*(rq.
+This can cause blind recipients to
+inadvertently reply to all of the sighted recipients of the
+original message, revealing that they received a blind copy.
+On the other hand, since a normal reply to a message sent
+via a \*(lqBcc:\*(rq field
+will generate a reply only to the sender of the original message,
+it takes extra effort in most mailers to reply to the included
+message, and so would usually only be done deliberately, rather
+than by accident.
+.PP
+.B post
+rejects any message that contains a \*(lqDcc:\*(rq field if the
+.B sendmail/pipe
+mail transport method is used.
+.PP
+The
+.B \-alias
+.I aliasfile
+switch can be used to specify a file that post should read aliases from.
+More than one file can be specified, with each being preceded by
+.BR \-alias .
+In any event, the primary alias file is read first.
+.PP
+The
+.B \-msgid
+switch indicates that a \*(lqMessage\-ID:\*(rq or
+\*(lqResent\-Message\-ID:\*(rq field should be added to the header.
+.PP
+The
+.B \-messageid
+switch selects the style used for the part appearing after the @
+in \*(lqMessage\-ID:\*(rq, \*(lqResent\-Message\-ID:\*(rq, and
+\*(lqContent\-ID:\*(rq header fields.  The two acceptable options are
+.B localname
+(which is the default),
+and
+.BR random .
+With
+.BR localname ,
+the local hostname is used.  With
+.BR random ,
+a random sequence of characters is used instead.  Note that the
+.B \-msgid
+switch must be enabled for this switch to have any effect.
+.PP
+The
+.B \-verbose
+switch indicates that the user should be informed of
+each step of the posting/filing process.
+.PP
+The
+.B \-watch
+switch indicates that the user would like to watch the
+transport system's handling of the message (e.g., local and \*(lqfast\*(rq
+delivery).
+.PP
+Under normal circumstances,
+.B post
+uses the \*(lqFrom:\*(rq line in the message draft as the identity of
+the originating mailbox.  A \*(lqFrom:\*(rq line is required in
+all message drafts.  By default the message composition utilities such
+as
+.BR comp ,
+.B repl
+and
+.B mhmail
+will automatically place a \*(lqFrom:\*(rq line in the message draft.
+There are two ways to override this behavior, however.
+Note that they apply equally to \*(lqResent\-From:\*(rq lines in messages sent
+with
+.BR dist .
+.PP
+The first way is to supply a \*(lqSender:\*(rq line.  The value of this
+field will be used as the originating mailbox identity when submitting the
+message to the mail transport system.  If multiple addresses are
+given in the \*(lqFrom:\*(rq line, a \*(lqSender:\*(rq line is
+.BR required .
+If an \*(lqEnvelope-From:\*(rq line is supplied when multiple addresses
+are given in the \*(lqFrom:\*(rq line, a \*(lqSender:\*(rq header will
+be generated using the value of the \*(lqEnvelope-From:\*(rq line,
+.B if
+the \*(lqEnvelope-From:\*(rq line is not blank.
+.PP
+The second way is to supply a \*(lqEnvelope-From:\*(rq line.  The value
+of this field will be used as the originating mailbox identity when
+submitting the message to the mail transport system.  This will override
+both the value of the \*(lqFrom:\*(rq line and a \*(lqSender:\*(rq line
+(if one is supplied).  The \*(lqEnvelope-From:\*(rq line is allowed to
+have a blank value; if the value is blank, then the mail transport system
+will be instructed to not send any bounces in response to the message.
+Not all mail transport systems support this feature.
+.PP
+The mail transport system default is defined in
+.I %nmhetcdir%/mts.conf
+but can be overridden here with the
+.B \-mts
+switch.
+.PP
+If nmh is using
+.B sendmail/pipe
+or
+.B sendmail/smtp
+as its mail transport system, the
+.B \-sendmail
+switch can be used to override the default
+.B sendmail
+program.
+.PP
+If nmh is using the SMTP MTA, the
+.B \-server
+and
+.B \-port
+switches can be used to override the default mail server and port.
+The default server is set with
+.I servers
+in
+.IR %nmhetcdir%/mts.conf ,
+and the default port is
+.IR submission ,
+587.
+.PP
+If
+.B nmh
+has been compiled with SASL support, the
+.B \-sasl
+and
+.B \-nosasl
+switches will enable and disable
+the use of SASL authentication with the SMTP MTA.  Depending on the
+SASL mechanism used, this may require an additional password prompt from the
+user (but the
+.I netrc
+file can be used to store this password, as described in
+.IR mh-profile (5).
+The
+.B \-saslmech
+switch can be used to select a particular SASL mechanism,
+and the
+.B \-user
+switch can be used to select an authorization userid to provide to SASL,
+other than the default.  The credentials profile entry in
+.IR mh-profile (5)
+describes the ways to supply a username and password.
+.PP
+If SASL authentication is successful,
+nmh
+will attempt to negotiate a security layer for session encryption.
+Encrypted data is labelled with `(sasl-encrypted)' and `(sasl-decrypted)' when
+viewing the SMTP transaction with the
+.B \-snoop
+switch.
+Base64-encoded data is wrapped with `b64<>'.
+(Beware that the SMTP transaction may contain authentication information either
+in plaintext or easily decoded base64.)
+.PP
+If
+.B nmh
+has been compiled with TLS support, the
+.B \-tls
+and
+.B \-initialtls
+switches will require the negotiation of TLS when connecting to the SMTP MTA.
+The
+.B \-tls
+switch will negotiate TLS as part of the normal SMTP protocol
+using the STARTTLS command.  The
+.B \-initialtls
+will negotiate TLS immediately after the connection has
+taken place, before any SMTP commands are sent or received.  Encrypted data
+is labelled with `(tls-encrypted)' and
+`(tls-decrypted)' when viewing the SMTP transaction with the
+.B \-snoop
+switch.
+Base64-encoded data is wrapped with `b64<>'.
+(Beware that the SMTP transaction may contain authentication information either
+in plaintext or easily decoded base64.)
+The
+.B \-notls
+switch will disable all attempts to negotiate TLS.
+.PP
+If port 465 is specified and none of the TLS switches were enabled,
+.B \-initialtls
+will be implied if TLS support was compiled in.  Though port 465 for
+SMTPS (SMTP over SSL) was deregistered by IANA in 1998, it is still
+used for that service.
+.PP
+.B post
+filters out header lines with names beginning with \*(lqNmh-\*(rq
+(case insensitive) from the message draft.
+Those lines are reserved for internal
+.B nmh
+use.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^%nmhetcdir%/mts.conf~^nmh mts configuration file
+^%nmhetcdir%/MailAliases~^global nmh alias file
+^%bindir%/refile~^Program to process Fcc:s
+^%nmhlibexecdir%/mhl~^Program to process Bcc:s
+.fi
+.SH "PROFILE COMPONENTS"
+.B post
+does
+.I not
+consult the user's
+.I \&.mh_profile
+.SH "SEE ALSO"
+.IR mhmail (1),
+.IR send (1),
+.IR mh\-mail (5),
+.IR mh\-alias (5),
+.IR mh\-profile (5),
+.IR mh\-tailor (5)
+.PP
+.I "Standard for the Format of ARPA Internet Text Messages"
+(RFC 822)
+.SH DEFAULTS
+.nf
+.RB ` \-alias "' defaults to %nmhetcdir%/MailAliases"
+.RB ` \-format '
+.RB ` \-nomime '
+.RB ` \-nomsgid '
+.RB ` "\-messageid\ localname" '
+.RB ` \-noverbose '
+.RB ` \-nowatch '
+.RB ` "\-width\ 72" '
+.RB ` \-nofilter '
+.fi
+.SH CONTEXT
+None
+.SH BUGS
+\*(lqReply\-To:\*(rq fields are allowed to have groups in them according
+to the RFC 822 specification, but
+.B post
+won't let you use them.

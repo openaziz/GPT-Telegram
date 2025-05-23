@@ -1,0 +1,128 @@
+{
+   Invalid free in valgrind/vgpreload_memcheck-amd64-linux.so
+   Memcheck:Free
+   fun:free
+   fun:__libc_freeres
+   fun:_vgnU_freeres
+   fun:__run_exit_handlers
+   fun:exit
+}
+
+{
+   Syscall param sendmsg(msg.msg_name) points to uninitialised byte(s)
+   Memcheck:Param
+   sendmsg(msg.msg_name)
+   fun:*sendmsg*
+   fun:readline
+}
+
+{
+   Syscall param msgsnd(msgp->mtext) points to uninitialised byte(s) [under fakeroot]
+   Memcheck:Param
+   msgsnd(msgp->mtext)
+   ...
+   obj:*libfakeroot*.so
+}
+
+{
+ Syscall param stat(file_name) points to uninitialised byte(s) [under fakeroot]
+ Memcheck:Param
+ stat(file_name)
+ ...
+ obj:*libfakeroot*.so
+}
+
+{
+   Syscall param socketcall.connect(serv_addr.sa_data) points to uninitialised byte(s) (MacOS X)
+   Memcheck:Param
+   socketcall.connect(serv_addr.sa_data)
+   fun:connect
+   ...
+   fun:si_addrinfo
+}
+
+{
+   gdbm 1.13 writes uninitialised bytes from malloc'd area to file
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:_gdbm_full_write
+   fun:gdbm_fd_open
+   fun:dbm_open
+}
+
+{
+   iconv_open on Fedora 33
+   Memcheck:Addr16
+   fun:strncmp
+   ...
+   fun:iconv_open
+}
+
+{
+   iconv_open on Manjaro with glibc 2.36-6
+   Memcheck:Addr8
+   fun:strncmp
+   fun:is_dst
+   ...
+   fun:iconv_open
+   fun:get_param_value
+}
+
+{
+   dyld libraryLocator on MacOS 10.11.6 (El Capitan)
+   Memcheck:Cond
+   fun:vbcmp
+   ...
+   fun:_ZN4dyldL14libraryLocator*
+}
+
+{
+   dyld libraryLocator on MacOS 10.11.6 (El Capitan)
+   Memcheck:Value8
+   fun:bcmp
+   ...
+   fun:_ZN4dyldL14libraryLocator*
+}
+
+{
+   dyld ImageLoader on MacOS 10.11.6 (El Capitan)
+   Memcheck:Cond
+   fun:_ZN16ImageLoaderMachO18validateFirstPagesEPK21linkedit_data_commandiPKhmxRKN11ImageLoader11LinkContextE
+   ...
+   fun:_ZN4dyldL14libraryLocator*
+}
+
+{
+   Mach msg uninitialized bytes (MacOS X)
+   Memcheck:Param
+   mach_msg("rcv_name")
+   fun:mach_msg_trap
+   ...
+   fun:_os_trace*
+}
+
+{
+   Mach msg->desc.port uninitialized bytes (MacOS X)
+   Memcheck:Param
+   msg->desc.port.name
+   fun:mach_msg_trap
+   ...
+   fun:_os_trace*
+}
+
+{
+   Invalid read of size 16 (MacOS X)
+   Memcheck:Addr16
+   fun:_platform_memchr$VARIANT$Base
+   fun:fgets
+   fun:mts_read_conf_file
+}
+
+{
+   memmove on Manjaro with glibc 2.36-6
+   Memcheck:Overlap
+   fun:__memcpy_chk
+   fun:memmove
+   fun:fmt_scan
+}

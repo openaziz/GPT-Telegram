@@ -1,0 +1,216 @@
+.TH MSGCHK %manext1% 2016-11-02 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+msgchk \- nmh's check for incoming email
+.SH SYNOPSIS
+.HP 5
+.na
+.B msgchk
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-date " | " \-nodate ]
+.RB [ \-notify
+all/mail/nomail ]
+.RB [ \-nonotify
+all/mail/nomail ]
+.RB [ \-host
+.IR hostname ]
+.RB [ \-port
+.IR portname/number ]
+.RB [ \-user
+.IR username ]
+.RB [ \-sasl " | " \-nosasl ]
+.RB [ \-saslmech
+.IR mechanism ]
+.RB [ \-tls ]
+.RB [ \-initialtls ]
+.RB [ \-notls ]
+.RB [ \-certverify " | " \-nocertverify ]
+.RB [ \-authservice
+.IR service ]
+.RB [ \-snoop ]
+.RI [ users
+\&... ]
+.ad
+.SH DESCRIPTION
+The
+.B msgchk
+program checks all known mail drops for mail waiting
+for you.  For those drops which have mail for you,
+.B msgchk
+will
+indicate if it believes that you have seen the mail in question before.
+.PP
+The
+.B \-notify
+.I type
+switch indicates under what circumstances
+.B msgchk
+should produce a message.  The default is
+.B \-notify
+.I all
+which says that
+.B msgchk
+should always report the status of the
+users mail drop.  Other values for `type' include `mail' which says that
+.B msgchk
+should report the status of waiting mail; and, `nomail'
+which says that
+.B msgchk
+should report the status of empty mail drops.
+The
+.B \-nonotify
+.I type
+switch has the inverted sense, so
+.B \-nonotify
+.I all
+directs
+.B msgchk
+to never report the status of
+mail drops.  This is useful if the user wishes to check
+.BR msgchk 's
+exit status.  A non-zero exit status indicates that mail was
+.I not
+waiting for at least one of the indicated users.
+.PP
+If
+.B msgchk
+produces output, then the
+.B \-date
+switch directs
+.B msgchk
+to print out the last date mail was read, if this can
+be determined.
+.SS "Using POP"
+.B msgchk
+will normally check all the local mail drops, but if
+the option \*(lqpophost:\*(rq is set in the mts configuration file
+\*(lqmts.conf\*(rq, or if the
+.B \-host
+.I hostname
+switch is given,
+.B msgchk
+will query this POP service host as to the status of
+mail waiting.  The
+.B \-port
+switch specifies the port name or number used to connect to the POP
+server.  If unspecified, the default is \*(lqpop3\*(rq.
+.PP
+To specify a username for authentication with the POP server, use the
+.B \-user
+.I username
+switch.  The credentials profile entry in
+.IR mh\-profile (5)
+describes the ways to supply a username and password.
+.PP
+For debugging purposes, there is also a switch
+.BR \-snoop ,
+which will
+allow you to watch the POP transaction take place between you and the
+POP server.  If
+.B \-sasl \-saslmech xoauth2
+is used, the HTTP transaction is also shown.
+.PP
+If
+.B nmh
+has been compiled with SASL support, the
+.B \-sasl
+switch will enable
+the use of SASL authentication.  Depending on the SASL mechanism used, this
+may require an additional password prompt from the user (but the
+.I netrc
+file can be used to store this password, as described in
+.IR mh-profile (5).
+The
+.B \-saslmech
+switch can be used to select a particular SASL mechanism.
+.PP
+If SASL authentication is successful,
+.B msgchk
+will attempt to negotiate
+a security layer for session encryption.  Encrypted traffic is labelled
+with `(encrypted)' and `(decrypted)' when viewing the POP transaction
+with the
+.B \-snoop
+switch; see
+.IR post (8)'s
+description of
+.B \-snoop
+for its other features.
+.PP
+If
+.B nmh
+has been compiled with OAuth support, the
+.B \-sasl \-saslmech xoauth2
+switch will enable OAuth authentication.  The
+.B \-user
+switch must be used, and the
+.I user-name
+must be an email address the user has for the service, which must
+be specified with the
+.B \-authservice
+.I service
+switch.  Before using this, the user must authorize nmh by running
+.B mhlogin
+and grant authorization to that account.  See
+.IR mhlogin (1)
+for more details.
+.PP
+If
+.B nmh
+has been compiled with TLS support, the
+.B \-tls
+and
+.B \-initialtls
+switches will require the negotiation of TLS when connecting
+to the remote POP server.  The
+.B \-tls
+switch will negotiate TLS as part of the normal POP protocol using
+the STLS command.  The
+.B \-initialtls
+switch will negotiate TLS immediately after the connection has taken place,
+before any POP commands are sent or received.  Data encrypted by TLS is
+labeled `(tls-encrypted)' and `(tls-decrypted)' with viewing the POP
+transaction with the
+.B \-snoop
+switch.  The
+.B \-notls
+switch will disable all attempts to negotiate TLS.
+.PP
+When using TLS the default is to verify the remote certificate and SubjectName
+against the local trusted certificate store.  This can be controlled by
+the
+.B \-certverify
+and
+.B \-nocertverify
+switches.  See your OpenSSL documentation for more information on certificate
+verification.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+^%nmhetcdir%/mts.conf~^nmh mts configuration file
+^%mailspool%/$USER~^Location of mail drop
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+None
+.fi
+.SH "SEE ALSO"
+.IR inc (1),
+.IR mh\-mail (5),
+.IR post (8)
+.SH DEFAULTS
+.nf
+.RB ` user "' defaults to the current user"
+.RB ` \-date '
+.RB ` "\-notify\ all" '
+.fi
+.SH CONTEXT
+None

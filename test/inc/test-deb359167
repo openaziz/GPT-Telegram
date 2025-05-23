@@ -1,0 +1,39 @@
+#!/bin/sh
+# Test a variant of a mailbox which caused debian bug 359167.
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# valgrind throws a strange error on FreeBSD >= 10; skip the test
+# for now while we try to track down the underlying cause.
+if [ `uname -s` = 'FreeBSD' ]; then
+  case `uname -r` in
+    1?.*) test_skip 'valgrind fails on FreeBSD >= 10' ;;
+  esac
+fi
+
+require_prog valgrind
+
+THISDIR="$srcdir/test/inc"
+TESTMBOX="$THISDIR/deb359167.mbox"
+
+if [ "`output_md5 "$TESTMBOX"`" != "e6ac458b8cccba2b2fd866fb505aeb5e" ]; then
+    echo "Test mailbox has been corrupted"
+    exit 1
+fi
+
+#
+# valgrind refuses to run on a setuid/setgid program, so chmod inc so it
+# isn't (just in case)
+#
+
+chmod 755 ${MH_INST_DIR}${bindir}/inc
+
+valgrind --error-exitcode=1 --quiet --suppressions="${srcdir}/test/valgrind.supp" inc -silent -file "$TESTMBOX"

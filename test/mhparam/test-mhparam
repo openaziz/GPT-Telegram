@@ -1,0 +1,198 @@
+#!/bin/sh
+######################################################
+#
+# Test mhparam
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' mhparam -
+check_exit '-eq 0' mhparam localmbox
+
+expected=$MH_TEST_DIR/$$.expected
+expected_err=$MH_TEST_DIR/$$.expected_err
+actual=$MH_TEST_DIR/$$.actual
+actual_err=$MH_TEST_DIR/$$.actual_err
+
+
+# check -help
+start_test "-help"
+cat >$expected <<EOF
+Usage: mhparam [profile-components] [switches]
+  switches are:
+  -[no]components
+  -all
+  -version
+  -help
+  -(debug)
+EOF
+
+#### Skip nmh intro text.
+mhparam -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `mhparam -v` in
+  mhparam\ --*) ;;
+  *           ) echo "$0: mhparam -v generated unexpected output" 1>&2
+                failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown option
+start_test "unknown option"
+run_test 'mhparam -nonexistent' 'mhparam: -nonexistent unknown'
+
+# check -all
+start_test "-all"
+cp "$MH" $expected
+# -all adds current folder and Version
+echo 'Current-Folder: '`folder -f` >>$expected
+echo "Version: nmh-$MH_VERSION" >>$expected
+run_prog mhparam -all >$actual
+check $expected $actual 'keep first'
+
+# check -all with a component
+start_test "-all with a component"
+echo 'mhparam: profile-components ignored with -all' >$expected_err
+run_prog mhparam -all path >$actual 2>$actual_err
+check $expected $actual 'keep first'
+check $expected_err $actual_err
+
+# check -all with -components
+start_test "-all with -components"
+echo 'mhparam: -components ignored with -all' >$expected_err
+run_prog mhparam -all -components >$actual 2>$actual_err
+check $expected $actual
+check $expected_err $actual_err
+
+# check one component
+start_test "one component"
+run_test 'mhparam path' "$MH_TEST_DIR/Mail"
+
+# check more than one component, which enables -component
+start_test "more than one component, which enables -component"
+echo 'AliasFile: aliases' >>"$MH"
+run_test 'mhparam path AliasFile' "path: $MH_TEST_DIR/Mail
+AliasFile: aliases"
+
+# check each component in procs array in uip/mhparam.c
+start_test "each component in procs array in uip/mhparam.c"
+# The tests don't override these, so they're default or configured values.
+# Note that cat is hardcoded here because the testsuite uses it for moreproc.
+cat >$expected <<EOF
+context
+.mh_sequences
+$MH_INST_DIR$bindir/mhbuild
+$MH_INST_DIR$bindir/refile
+700
+$bindir/inc
+more
+$MH_INST_DIR$bindir/mhmail
+$MH_INST_DIR$nmhlibexecdir/mhl
+cat
+600
+$bindir/packf
+$MH_INST_DIR$nmhlibexecdir/post
+$MH_INST_DIR$bindir/send
+$MH_INST_DIR$bindir/mhshow
+$MH_INST_DIR$nmhlibexecdir/mhl
+nmh-$MH_VERSION
+$MH_INST_DIR$bindir/whatnow
+$MH_INST_DIR$bindir/whom
+$nmhetcdirinst
+$MH_LIBEXEC_DIR
+fcntl
+${default_locking}
+EOF
+
+run_prog mhparam -nocomponent \
+context \
+mh-sequences \
+buildmimeproc \
+fileproc \
+foldprot \
+incproc \
+lproc \
+mailproc \
+mhlproc \
+moreproc \
+msgprot \
+packproc \
+postproc \
+sendproc \
+showmimeproc \
+showproc \
+version \
+whatnowproc \
+whomproc \
+etcdir \
+libexecdir \
+datalocking \
+spoollocking >$actual 2>&1
+
+check $expected $actual
+
+#### This exits with non-zero status, so let run_test squash that:
+run_test 'mhparam formatproc rmmproc' ''
+
+#### Test sbackup separately because it's only passed as a -D compile option.
+case `mhparam sbackup` in
+  ,|\#) ;;
+  *   ) echo mhparam sbackup failed
+        failed=`expr ${failed:-0} + 1` ;;
+esac
+
+# check -component
+start_test "-component"
+run_test 'mhparam -component Path' "Path: $MH_TEST_DIR/Mail"
+
+# check -component, note that component name of argument is echoed exactly
+start_test "-component, note that component name of argument is echoed exactly"
+run_test 'mhparam -component path' "path: $MH_TEST_DIR/Mail"
+run_test 'mhparam -component PATH' "PATH: $MH_TEST_DIR/Mail"
+
+# check -nocomponent
+start_test "-nocomponent"
+run_test 'mhparam -component -nocomponent path' "$MH_TEST_DIR/Mail"
+run_test 'mhparam -nocomponent path AliasFile' "$MH_TEST_DIR/Mail
+aliases"
+
+# check nonexistent component
+start_test "nonexistent component"
+run_test 'mhparam nonexistent' ''
+
+# check that exit status notes nonexistent components
+start_test "exit status notes nonexistent components"
+for c in 'missing' 'path missing' 'missing path' 'missing missing'; do
+    set +e
+    mhparam $c >/dev/null
+    e=$?
+    set -e
+    run_test "echo $e" 1
+done
+
+# mhparam -debug
+start_test "-debug"
+# Some of its output depends on configure options, so don't bother to
+# check for correctness here.
+mhparam -debug >/dev/null
+
+# check with text file that does not end with newline
+start_test "with text file that does not end with newline"
+printf 'Editor: emacs' >>"$MH"
+run_test 'mhparam -nocomponent editor' 'emacs'
+
+
+finish_test
+exit $failed

@@ -1,0 +1,94 @@
+#!/bin/sh
+######################################################
+#
+# Test rcvpack
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# Use proper program, likely not the first one on PATH.
+rcvpack="${MH_LIBEXEC_DIR}/rcvpack"
+
+check_exit '-eq 1' $rcvpack -
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+
+# check -help
+start_test "-help"
+cat >"$expected" <<EOF
+Usage: rcvpack [switches] file
+  switches are:
+  -mbox
+  -mmdf
+  -version
+  -help
+EOF
+
+#### Skip nmh intro text.
+run_prog "$rcvpack" -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `$rcvpack -v` in
+  rcvpack\ --*) ;;
+  *           ) printf '%s: rcvpack -v generated unexpected output\n' "$0" >&2
+                failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test "unknown switch"
+run_test "$rcvpack -nonexistent" 'rcvpack: -nonexistent unknown'
+
+# check with no switches
+start_test "with no switches"
+run_test "$rcvpack" 'rcvpack: rcvpack [switches] file'
+
+# check mbox creation
+start_test "mbox creation"
+run_prog $rcvpack <${MH_TEST_DIR}/Mail/inbox/1 ${MH_TEST_DIR}/Mail/mbox
+inc -file ${MH_TEST_DIR}/Mail/mbox -silent
+check "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/inbox/11" 'keep first'
+
+# check -mbox
+start_test "-mbox"
+run_prog $rcvpack -mmdf -mbox ${MH_TEST_DIR}/Mail/mbox2 \
+  <${MH_TEST_DIR}/Mail/inbox/1
+# Filter out "From " lines because their timestamps can differ by a second.
+grep -v '^From ' "${MH_TEST_DIR}/Mail/mbox" >"${MH_TEST_DIR}/Mail/mbox-filt"
+grep -v '^From ' "${MH_TEST_DIR}/Mail/mbox2" >"${MH_TEST_DIR}/Mail/mbox2-filt"
+check "${MH_TEST_DIR}/Mail/mbox-filt" "${MH_TEST_DIR}/Mail/mbox2-filt"
+
+# check append to existing mbox file
+start_test "append to existing mbox file"
+run_prog $rcvpack <${MH_TEST_DIR}/Mail/inbox/2 ${MH_TEST_DIR}/Mail/mbox
+inc -file ${MH_TEST_DIR}/Mail/mbox -silent
+check "${MH_TEST_DIR}/Mail/inbox/2" "${MH_TEST_DIR}/Mail/inbox/12" 'keep first'
+
+# check -mmdf
+start_test "-mmdf"
+run_prog $rcvpack -mmdf <${MH_TEST_DIR}/Mail/inbox/3 ${MH_TEST_DIR}/Mail/mmdf
+inc -file ${MH_TEST_DIR}/Mail/mmdf -silent
+check "${MH_TEST_DIR}/Mail/inbox/3" "${MH_TEST_DIR}/Mail/inbox/12" 'keep first'
+
+# check append to existing mmdf file
+start_test "append to existing mmdf file"
+run_prog $rcvpack -mmdf <${MH_TEST_DIR}/Mail/inbox/4 ${MH_TEST_DIR}/Mail/mmdf
+inc -file ${MH_TEST_DIR}/Mail/mmdf -silent
+check "${MH_TEST_DIR}/Mail/inbox/4" "${MH_TEST_DIR}/Mail/inbox/13" 'keep first'
+
+
+finish_test
+exit ${failed:-0}

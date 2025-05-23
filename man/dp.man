@@ -1,0 +1,86 @@
+.TH DP %manext8% 1999-04-30 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+dp \- nmh parser of RFC 822-style dates
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/dp
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-form
+.IR formatfile ]
+.RB [ \-format
+.IR string ]
+.RB [ \-width
+.IR columns ]
+.I dates
+\&...
+.ad
+.SH DESCRIPTION
+.B dp
+is a program that parses dates according to the ARPA Internet standard.
+It also understands many non-standard formats,
+such as those produced by TOPS\-20 sites and some Unix sites using
+.IR ctime (3).
+It is useful for seeing how
+.B nmh
+will interpret a date.
+.PP
+The
+.B dp
+program treats each argument as a single date,
+and prints the date out in the official RFC 822 format.
+Hence, it is usually best to enclose each argument in quotes for the
+shell.
+.PP
+To override the output format used by
+.BR dp ,
+the
+.B \-format
+.I string
+or
+.B \-format
+.I file
+switches are used.
+This permits individual fields of the address to be extracted with ease.
+The string is simply a format string and the file is simply a format file.
+See
+.IR mh\-format (5)
+for the details.
+.PP
+Here is the default format string used by
+.BR dp :
+.PP
+.RS 5
+%<(nodate{text})error: %{text}%|%(putstr(pretty{text}))%>
+.RE
+.PP
+which says that if an error was detected, print the error, a `:',
+and the date in error.
+Otherwise, output the RFC 822\-proper format of the date.
+.SH FILES
+.TP 20
+$HOME/.mh_profile
+The user's profile.
+.SH "PROFILE COMPONENTS"
+None
+.SH "SEE ALSO"
+.IR fmttest (1),
+.IR ap (8)
+.PP
+.I "Standard for the Format of ARPA Internet Text Messages"
+(RFC 822)
+.SH DEFAULTS
+.PD 0
+.TP 20
+\-format
+As described above.
+.TP
+\-width
+The width of the terminal.
+.PD
+.SH CONTEXT
+None

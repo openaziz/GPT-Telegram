@@ -1,0 +1,379 @@
+#!/bin/sh
+######################################################
+#
+# Test the use of the Nmh-Attach: header
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+require_locale $en_locales
+
+draft="$MH_TEST_DIR/$$.draft"
+backup="${MH_TEST_DIR}/`mhparam sbackup`$$.draft.orig"
+expected="$MH_TEST_DIR/$$.expected"
+
+#
+# Test out a simple draft, one part.
+#
+start_test "simple draft, one part"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Nmh-Attach: ${srcdir}/test/mhbuild/tiny.jpg
+------
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: image/jpeg; name="tiny.jpg"
+Content-Description: tiny.jpg
+Content-Disposition: attachment; filename="tiny.jpg"
+Content-Transfer-Encoding: base64
+
+/9j////////Z
+EOF
+
+check "$draft" "$expected"
+
+#
+# Check out more common case, one (or more) attachments
+# along with message text.
+#
+start_test "out more common case, one (or more) attachments"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Nmh-Attach: ${srcdir}/test/mhbuild/tiny.jpg
+Nmh-Attach: ${srcdir}/test/mhbuild/nulls
+------
+This is a test
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test
+
+------- =_aaaaaaaaaa0
+Content-Type: image/jpeg; name="tiny.jpg"
+Content-Description: tiny.jpg
+Content-Disposition: attachment; filename="tiny.jpg"
+Content-Transfer-Encoding: base64
+
+/9j////////Z
+
+------- =_aaaaaaaaaa0
+Content-Type: application/octet-stream; name="nulls"
+Content-Description: nulls
+Content-Disposition: attachment; filename="nulls"
+Content-Transfer-Encoding: base64
+
+AAAAAAAAAAAAAAAAAAAA
+
+------- =_aaaaaaaaaa0--
+EOF
+
+check "$draft" "$expected"
+
+#
+# An empty Attach header
+#
+start_test "empty Attach header"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Nmh-Attach:
+------
+This is a test of an empty attach header.
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test of an empty attach header.
+EOF
+
+check "$draft" "$expected"
+
+#
+# Check a completely empty message
+#
+start_test "a completely empty message"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Test of an empty body
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Test of an empty body
+MIME-Version: 1.0
+Content-Type: text/plain
+EOF
+
+check "$draft" "$expected"
+
+#
+# Make sure we fail if we run into a MIME-Version header
+#
+start_test "fail if we run into a MIME-Version header"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Test of an already-MIMEified message
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a preformatted MIME content test.
+EOF
+
+set +e
+run_test 'eval mhbuild "$draft"' "mhbuild: draft shouldn't contain MIME-Version: field"
+set -e
+
+#
+# Run it again using -auto
+#
+
+run_prog mhbuild -auto "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Test of an already-MIMEified message
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a preformatted MIME content test.
+EOF
+
+check "$draft" "$expected"
+
+#
+# Make sure -dist does nothing but encode headers
+#
+start_test "-dist does nothing but encode headers"
+cat > "$draft" <<EOF
+To: Señor Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: An empty dist test
+EOF
+
+run_prog mhbuild -dist "$draft"
+
+cat > "$expected" <<EOF
+To: =?UTF-8?Q?Se=C3=B1or_Test?= <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: An empty dist test
+EOF
+
+check "$draft" "$expected"
+
+#
+# Two parts, one attachment; make sure mixing of multiparts at different
+# levels works.  This also tests Attach: instead of Nmh-Attach:.
+#
+start_test "two parts, one attachment"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: A more complete multipart test
+Attach: ${srcdir}/test/mhbuild/tiny.jpg
+--------
+#begin alternative
+#<text/plain
+This is some tëxt.
+#<text/html
+<html>
+<body>
+This is some HTML tëxt.
+</body>
+</html>
+#end
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: A more complete multipart test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+Content-Transfer-Encoding: 8bit
+
+------- =_aaaaaaaaaa0
+Content-Type: multipart/alternative; boundary="----- =_aaaaaaaaaa1"
+Content-Transfer-Encoding: 8bit
+
+------- =_aaaaaaaaaa1
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+This is some tëxt.
+
+------- =_aaaaaaaaaa1
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+<html>
+<body>
+This is some HTML tëxt.
+</body>
+</html>
+
+------- =_aaaaaaaaaa1--
+
+------- =_aaaaaaaaaa0
+Content-Type: image/jpeg; name="tiny.jpg"
+Content-Description: tiny.jpg
+Content-Disposition: attachment; filename="tiny.jpg"
+Content-Transfer-Encoding: base64
+
+/9j////////Z
+
+------- =_aaaaaaaaaa0--
+EOF
+
+check "$draft" "$expected"
+
+#
+# One attachment, text/plain containing some binary characters,
+# include NUL bytes.
+#
+start_test "One attachment, text/plain containing some binary characters"
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Testing some binary chars
+--------
+This is some tëxt.
+#text/plain; name="somebinary" [ - ] {attachment} ${srcdir}/test/mhbuild/somebinary
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: Testing some binary chars
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+Content-Transfer-Encoding: 8bit
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+This is some tëxt.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; name="somebinary"; charset="us-ascii"
+Content-Description:  - 
+Content-Disposition: attachment; filename="somebinary"
+Content-Transfer-Encoding: quoted-printable
+
+
+=46rom here on, this is only =
+
+a test, though it contains =13ome
+=00odd=00 bytes.
+
+------- =_aaaaaaaaaa0--
+EOF
+
+check "$draft" "$expected"
+
+# check that blank line is inserted between header and content
+start_test "that blank line is inserted between header and content"
+cat > "$MH_TEST_DIR/Mail/oneline" <<EOF
+There needs to be a blank line before this content line.
+EOF
+
+cat > "$draft" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: test blank line between header and content
+--------
+#text/plain {inline} $MH_TEST_DIR/Mail/oneline
+#application/octet-stream {inline} $MH_TEST_DIR/Mail/oneline
+EOF
+
+run_prog mhbuild "$draft"
+
+cat > "$expected" <<EOF
+To: Mr Test <mrtest@example.com>
+cc:
+Fcc: +outbox
+Subject: test blank line between header and content
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii"
+Content-Disposition: inline; filename="oneline"
+
+There needs to be a blank line before this content line.
+
+------- =_aaaaaaaaaa0
+Content-Type: application/octet-stream
+Content-Disposition: inline; filename="oneline"
+
+There needs to be a blank line before this content line.
+
+------- =_aaaaaaaaaa0--
+EOF
+
+check "$draft" "$expected"
+
+
+[ ${failed:=0} -eq 0 ]  &&  rm -f ${backup}
+
+finish_test
+exit ${failed:-0}

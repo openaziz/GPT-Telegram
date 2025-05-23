@@ -1,0 +1,127 @@
+#!/bin/sh
+######################################################
+#
+# Test SMTPUTF8 (RFC 6531) support.
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "${srcdir}/test/post/test-post-common.sh"
+
+setup_test
+mhl="${MH_LIBEXEC_DIR}/mhl"
+SMTPUTF8=1; export SMTPUTF8
+
+#### Make sure that html-to-text conversion is what we expect.
+require_locale $en_locales
+
+#### Enable EAI in mhbuild, via the profile.
+sed "s%^\(mhbuild: .*\)%\1 -headerencoding utf-8%" "$MH" >"$MH.new"
+mv -f "$MH.new" "$MH"
+
+# check SMTPUTF8 basic
+start_test 'SMTPUTF8 basic'
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<senderø@example.com> BODY=8BITMIME SMTPUTF8
+RCPT TO:<recipientæ@example.com>
+DATA
+From: senderø@example.com
+To: recipientæ@example.com
+Subject: Blåbærsyltetøy
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+Date:
+
+Blåbærsyltetøy er veldig godt. Jeg liker blåbærsyltetøy.
+Jøran.
+
+Text source:
+Arnt Gulbrandsen and Jiankang Yao, "Email Address Internationalization",
+Computing Edge 1:6, June 2015,
+http://www.computer.org/cms/computing-edge/ce-jun15-final.pdf, p. 50.
+.
+QUIT
+EOF
+
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: senderø@example.com
+To: recipientæ@example.com
+Subject: Blåbærsyltetøy
+--------
+Blåbærsyltetøy er veldig godt. Jeg liker blåbærsyltetøy.
+Jøran.
+
+Text source:
+Arnt Gulbrandsen and Jiankang Yao, "Email Address Internationalization",
+Computing Edge 1:6, June 2015,
+http://www.computer.org/cms/computing-edge/ce-jun15-final.pdf, p. 50.
+EOF
+
+test_post "${testname}.actual" "${testname}.expected"
+
+
+# check SMTPUTF8 without 8-bit body
+start_test '8-bit headers with ASCII body'
+
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+MAIL FROM:<senderø@example.com> BODY=8BITMIME SMTPUTF8
+RCPT TO:<recipientæ@example.com>
+DATA
+From: senderø@example.com
+To: recipientæ@example.com
+Subject: Blåbærsyltetøy
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+Date:
+
+This is a test.
+.
+QUIT
+EOF
+
+cat > "${MH_TEST_DIR}/Mail/draft" <<EOF
+From: senderø@example.com
+To: recipientæ@example.com
+Subject: Blåbærsyltetøy
+--------
+This is a test.
+EOF
+
+test_post "${testname}.actual" "${testname}.expected"
+
+
+# check with smtp server that doesn't support SMTPUTF8
+start_test "smtp server doesn't support SMTPUTF8"
+unset SMTPUTF8
+cat > "${testname}.expected" <<EOF
+EHLO nosuchhost.example.com
+RSET
+QUIT
+EOF
+cat > "${testname}.expected.err" <<EOF
+post: SMTP server does not support SMTPUTF8, not sending.
+Rebuild message with 7-bit headers, WITHOUT -headerencoding utf-8.
+post: problem initializing server; [BHST] ready; I'll buy that for a dollar!
+send: message not delivered to anyone
+EOF
+mv -f "${MH_TEST_DIR}/Mail/`mhparam sbackup`draft" "${MH_TEST_DIR}/Mail/draft"
+
+set +e
+test_post "${testname}.actual" "${testname}.expected" 2>"${testname}.err"
+set -e
+check "${testname}.err" "${testname}.expected.err"
+
+
+finish_test
+exit $failed

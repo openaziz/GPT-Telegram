@@ -1,0 +1,20 @@
+#!/bin/sh
+######################################################
+#
+# Test the -total switch
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+output=`run_prog folder -total +inbox`
+if test x"$output" != x'TOTAL = 10 messages in 1 folder.' ; then
+    exit 1
+fi

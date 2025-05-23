@@ -1,0 +1,171 @@
+.TH MH-ALIAS %manext5% 2014-04-18 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mh-alias \- format of nmh email-address alias files
+.SH DESCRIPTION
+.PP
+Each line of an
+.B nmh
+alias file takes one of the following forms:
+.PP
+.RS 5
+.I alias
+.B :
+.I address-group
+.RE
+.sp
+.RS 5
+.I alias
+.B ;
+.I address-group
+.RE
+.sp
+.RS 5
+.B <
+.I alias-file
+.RE
+.sp
+.RS 5
+.B ;
+|
+.B :
+|
+.B #
+.I comment
+.RE
+.PP
+where:
+.PP
+.RS 5
+.nf
+.IR address-group "	:= " address-list
+.RI "			|  < " file
+
+.IR address-list "	:= " address
+.RI "			|  " address-list ", " address
+.fi
+.RE
+.PP
+Continuation lines end with \*(lq\\\*(rq followed by a newline
+character.  This also applies to comment lines.  Thus, the line following a
+\*(lq\\\*(rq-terminated
+comment line is a continuation of
+that comment line.
+.PP
+.I Alias-file
+and
+.I file
+are Unix file names.
+Alias file contents are case-insensitive, with the exception
+of filesystem path names.
+.PP
+If the line starts with a \*(lq<\*(rq, the file named after the \*(lq<\*(rq is
+read for more alias definitions.  The reading is done recursively, so a
+\*(lq<\*(rq may occur in the beginning of an alias file with the expected results.
+.PP
+If the
+.I address-group
+starts with a \*(lq<\*(rq, the file named after the
+\*(lq<\*(rq is read and its contents are added to the
+.I address-list
+for the alias.
+.PP
+In match, a trailing \*(lq*\*(rq on an alias will match just about anything
+appropriate.
+.PP
+An approximation of the way aliases are resolved at posting time is:
+.IP 1)
+Build a list of all addresses from the message to be delivered,
+eliminating duplicate addresses.
+.IP 2)
+For those addresses in the message that have no host specified,
+perform alias resolution.
+.IP 3)
+For each line in the alias file, compare \*(lqalias\*(rq against all of
+the existing addresses.  If a match, remove the matched \*(lqalias\*(rq
+from the address list, and add each new address in the address-group to
+the address list if it is not already on the list.  The alias itself is
+not usually output, rather the address-group that the alias maps to is
+output instead.  If \*(lqalias\*(rq is terminated with a \*(lq;\*(rq instead of
+a \*(lq:\*(rq, then both the \*(lqalias\*(rq and the address are output in the
+correct format (with the alias quoted if necessary and the address
+wrapped in <>).
+.PP
+Since the
+.I mh-alias
+file is read line by line, forward references work, but
+backward references are not recognized.
+.SS
+Example Alias File
+.PP
+.RS 5
+.nf
+<%nmhetcdir%/BBoardAliases
+sgroup: fred, fear, freida
+fred: frated@UCI.example
+b-people: Blind List: bill, betty
+Unix\-committee: <unix.aliases
+news.*: news
+.fi
+.RE
+.PP
+The first line says that more aliases should immediately be read from
+the file
+.BR %nmhetcdir%/BBoardAliases .
+Next, \*(lqsgroup\*(rq is defined as an alias for three names,
+and one of them, \*(lqfred\*(rq,
+is a forward reference to another alias for \*(lqfrated@UCI.example\*(rq.
+.PP
+The alias \*(lqb-people\*(rq is a blind list which includes the addresses
+\*(lqbill\*(rq and \*(lqbetty\*(rq; the message will be delivered to those
+addresses, but the message header will show only \*(lqBlind List: ;\*(rq
+(not the addresses).  The alias must not be terminated with, or contain,
+a semicolon.
+Note that blind lists are not supported with the
+.B sendmail/pipe
+mail transport method.
+.PP
+The definition of \*(lqUnix\-committee\*(rq is given by
+reading the file
+.I unix.aliases
+in the user's
+.B nmh
+directory.
+.PP
+Lastly,
+.RI \*(lqnews. anything \*(rq
+is aliased to \*(lqnews\*(rq;
+the full stop is just another literal character.
+.SH "PROFILE COMPONENTS"
+.TP 20
+Aliasfile:
+Default alias file.
+.SH FILES
+.TP 20
+%nmhetcdir%/MailAliases
+System-wide default alias file.
+.SH "SEE ALSO"
+.IR ali (1),
+.IR send (1),
+.IR whom (1),
+.IR getgrent (3),
+.IR getpwent (3),
+.IR post (8)
+.SH BUGS
+Although the forward-referencing semantics of
+mh\-alias
+files prevent recursion, the
+.B alias-file
+directive may defeat this.
+Since the number of file descriptors is finite, such
+infinite recursion will terminate with a meaningless diagnostic when
+all the fds are used up.
+.PP
+Earlier versions of this man page showed a semicolon at the end of the
+blind list example.  That caused the preceding alias to not be
+expanded.  There must not be a semicolon at the end of, or within, the
+address group of a blind list.
+.B post
+will append the semicolon to the blind list name.

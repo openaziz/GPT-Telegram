@@ -1,0 +1,161 @@
+#!/bin/sh
+######################################################
+#
+# Test mhpath
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' mhpath -
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+
+# check -help
+start_test "-help"
+cat > $expected <<EOF
+Usage: mhpath [+folder] [msgs] [switches]
+  switches are:
+  -version
+  -help
+EOF
+
+#### Skip nmh intro text.
+run_prog mhpath -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `mhpath -v` in
+  mhpath\ --*) ;;
+  *          ) echo "$0: mhpath -v generated unexpected output" 1>&2
+               failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check +
+start_test "+"
+run_test "mhpath +" "$MH_TEST_DIR/Mail"
+
+# check with no options
+start_test "with no options"
+folder -fast +inbox > /dev/null
+run_test "mhpath" "$MH_TEST_DIR/Mail/inbox"
+
+# check +inbox
+start_test "+inbox"
+run_test "mhpath +inbox" "$MH_TEST_DIR/Mail/inbox"
+
+# check all
+start_test "all"
+cat > $expected <<EOF
+$MH_TEST_DIR/Mail/inbox/1
+$MH_TEST_DIR/Mail/inbox/2
+$MH_TEST_DIR/Mail/inbox/3
+$MH_TEST_DIR/Mail/inbox/4
+$MH_TEST_DIR/Mail/inbox/5
+$MH_TEST_DIR/Mail/inbox/6
+$MH_TEST_DIR/Mail/inbox/7
+$MH_TEST_DIR/Mail/inbox/8
+$MH_TEST_DIR/Mail/inbox/9
+$MH_TEST_DIR/Mail/inbox/10
+EOF
+run_prog mhpath all > $actual 2>&1
+check $expected $actual
+
+# check message number greater than highest
+start_test "message number greater than highest"
+run_test "mhpath 11" "mhpath: message 11 out of range 1-10"
+run_test "mhpath 10 11" "mhpath: message 11 out of range 1-10"
+
+# check range with message number greater than highest
+start_test "range with message number greater than highest"
+cat > $expected <<EOF
+$MH_TEST_DIR/Mail/inbox/1
+$MH_TEST_DIR/Mail/inbox/2
+$MH_TEST_DIR/Mail/inbox/3
+$MH_TEST_DIR/Mail/inbox/4
+$MH_TEST_DIR/Mail/inbox/5
+$MH_TEST_DIR/Mail/inbox/6
+$MH_TEST_DIR/Mail/inbox/7
+$MH_TEST_DIR/Mail/inbox/8
+$MH_TEST_DIR/Mail/inbox/9
+$MH_TEST_DIR/Mail/inbox/10
+EOF
+run_prog mhpath 1-99999 > $actual 2>&1
+check $expected $actual
+
+# check new
+start_test "new"
+run_test "mhpath new" "$MH_TEST_DIR/Mail/inbox/11"
+
+# check multiple msgs, including new
+start_test "multiple msgs, including new"
+cat > $expected <<EOF
+$MH_TEST_DIR/Mail/inbox/1
+$MH_TEST_DIR/Mail/inbox/10
+$MH_TEST_DIR/Mail/inbox/11
+EOF
+run_prog mhpath first last new > $actual 2>&1
+check $expected $actual
+
+# check invalid message list using names
+start_test "invalid message list using names"
+run_test "mhpath last-new" "mhpath: bad message list last-new"
+
+# check cur
+start_test "cur"
+folder +inbox 5 > /dev/null
+run_test "mhpath cur" "$MH_TEST_DIR/Mail/inbox/5"
+
+# check prev
+start_test "prev"
+run_test "mhpath prev" "$MH_TEST_DIR/Mail/inbox/4"
+
+# check next
+start_test "next"
+run_test "mhpath next" "$MH_TEST_DIR/Mail/inbox/6"
+
+# check invalid message list using numbers
+start_test "invalid message list using numbers"
+rmm 1-2
+run_test "mhpath 1-2" "mhpath: no messages in range 1-2"
+
+# check ignoring of out-of-range message numbers in ranges
+start_test "ignoring of out-of-range message numbers in ranges"
+run_test "mhpath 1-3" "$MH_TEST_DIR/Mail/inbox/3"
+run_test "mhpath first-3" "$MH_TEST_DIR/Mail/inbox/3"
+run_test "mhpath 10-11" "$MH_TEST_DIR/Mail/inbox/10"
+run_test "mhpath last-11" "$MH_TEST_DIR/Mail/inbox/10"
+
+# check reference to existing messages
+start_test "reference to existing messages"
+cat > $expected <<EOF
+$MH_TEST_DIR/Mail/inbox/3
+$MH_TEST_DIR/Mail/inbox/4
+EOF
+run_prog mhpath first:2 > $actual 2>&1
+check $expected $actual
+
+# check reference to non-existent messages
+start_test "reference to non-existent messages"
+cat > $expected <<EOF
+$MH_TEST_DIR/Mail/inbox/1
+$MH_TEST_DIR/Mail/inbox/2
+EOF
+run_prog mhpath 1 2 > $actual 2>&1
+check $expected $actual
+
+
+finish_test
+exit $failed

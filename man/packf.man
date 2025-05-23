@@ -1,0 +1,86 @@
+.TH PACKF %manext1% 1999-05-13 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+packf \- pack messages in nmh folder into a single file
+.SH SYNOPSIS
+.HP 5
+.na
+.B packf
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-file
+.IR name ]
+.RB [ \-mbox ]
+.RB [ \-mmdf ]
+.ad
+.SH DESCRIPTION
+.B packf
+will pack copies of messages from a folder, into a single
+file.
+.PP
+If the
+.B \-mbox
+switch is given (the default), then the messages are
+separated using mbox (uucp) style delimiters.  This is the format used
+by most mail clients (elm, mailx, etc.).
+.PP
+If the
+.B \-mmdf
+switch is given, then the messages are separated by
+mmdf style delimiters.  Each message in the file is separated by four
+CTRL\-A's and a newline.
+.PP
+You may specify the name of the file in which to pack messages with the
+.B \-file
+.I name
+switch.  If you do not specify the name of the file, it
+will default to
+.RI \*(lq msgbox \*(rq.
+.PP
+If the given file name points to an existing file, then the specified
+messages will be appended to the end of the file, otherwise the file
+will be created and the messages appended.
+.PP
+.B packf
+makes an mbox-style delimiter by examining the first line
+of the message.  If the first line is a \*(lqReturn-Path\*(rq
+field, its address and the current date and time are used.  Otherwise,
+if the first line has an \*(lqX-Envelope-From\*(rq field, its
+contents (which should already be in the correct format) are used.
+Otherwise, a dummy address and the current date and time are used.
+.PP
+Messages that are packed by
+.B packf
+can be unpacked using
+.BR inc .
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^Msg\-Protect:~^To set mode when creating a new `file'
+.fi
+.SH "SEE ALSO"
+.IR inc (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` msgs "' defaults to all"
+.RB ` \-mbox '
+.RB ` "\-file ./msgbox" '
+.fi
+.SH CONTEXT
+If a folder is given, it will become the current folder.  The first
+message packed will become the current message.

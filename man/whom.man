@@ -1,0 +1,184 @@
+.TH WHOM %manext1% 2022-12-22 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+whom \- show to whom an nmh message would be sent
+.SH SYNOPSIS
+.HP 5
+.na
+.B whom
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-alias
+.IR aliasfile ]
+.RB [ \-check " | " \-nocheck ]
+.RB [ \-draftfolder
+.IR +folder ]
+.RB [ \-draftmessage
+.IR msg ]
+.RB [ \-nodraftfolder ]
+.RB [ \-mts
+.IR smtp " | " sendmail/smtp " | " sendmail/pipe ]
+.RB [ \-server
+.IR servername ]
+.RB [ \-port
+.IR port-name/number ]
+.RB [ \-sasl ]
+.RB [ \-saslmech
+.IR mechanism ]
+.RB [ \-snoop ]
+.RB [ \-user
+.IR username ]
+.RB [ \-tls ]
+.RB [ \-initialtls ]
+.RB [ \-notls ]
+.RI [ file ]
+.RB [ \-draft ]
+.ad
+.SH DESCRIPTION
+.B whom
+is used to expand the headers of a message into a set of
+addresses and optionally verify that those addresses are deliverable at
+that time (if
+.B \-check
+is given).
+.PP
+The
+.B \-draftfolder
+.I +folder
+and
+.B \-draftmessage
+.I msg
+switches invoke
+the
+.B nmh
+draft folder facility.  This is an advanced (and highly
+useful) feature.  Consult
+.IR mh-draft (5)
+for more information.
+.PP
+The mail transport system default is provided in
+.I %nmhetcdir%/mts.conf
+but can be overridden here with the
+.B \-mts
+switch.
+.PP
+If nmh is using the SMTP MTA, the
+.B \-server
+and the
+.B \-port
+switches can be used to override the default mail server (defined by the
+.I %nmhetcdir%/mts.conf
+.I servers
+entry).  The
+.B \-snoop
+switch can be used to view the SMTP transaction.  (Beware that the
+SMTP transaction may contain authentication information either in
+plaintext or easily decoded base64.)
+.PP
+If
+.B nmh
+has been compiled with SASL support, the
+.B \-sasl
+switch will enable
+the use of SASL authentication with the SMTP MTA.  Depending on the
+SASL mechanism used, this may require an additional password prompt from the
+user (but the
+.I netrc
+file can be used to store this password, as described in
+.IR mh-profile (5)).
+The
+.B \-saslmech
+switch can be used to select a particular SASL mechanism,
+and the
+.B \-user
+switch can be used to select a authorization userid to provide to SASL
+other than the default.  The credentials profile entry in
+.IR mh\-profile (5)
+describes the ways to supply a username and
+password.
+.PP
+If SASL authentication is successful,
+nmh
+will attempt to negotiate a security layer for session encryption.
+Encrypted data is labelled with `(encrypted)' and `(decrypted)' when
+viewing the SMTP transaction with the
+.B \-snoop
+switch; see
+.IR post (8)'s
+description of
+.B \-snoop
+for its other features.
+.PP
+If
+.B nmh
+has been compiled with TLS support, the
+.BR \-tls ,
+.BR \-initialtls ,
+and
+.B \-notls
+switches will require and disable the negotiation of TLS support when connecting to the
+SMTP MTA.  Encrypted data is labelled with `(tls-encrypted)' and
+`(tls-decrypted)' when viewing the SMTP transaction with the
+.B \-snoop
+switch; see
+.IR post (8)'s
+description of
+.B \-snoop
+and the TLS flags for more details.
+.PP
+The files specified by the profile entry \*(lqAliasfile:\*(rq and any
+additional alias files given by the
+.B \-alias
+.I aliasfile
+switch will be
+read (more than one file, each preceded by
+.BR \-alias ,
+can be named).  See
+.IR mh\-alias (5)
+for more information.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Draft\-Folder:~^To specify the default draftfolder
+^Aliasfile:~^For a default alias file
+^postproc:~^Program to post the message
+.fi
+.SH "SEE ALSO"
+.IR mh\-alias (5),
+.IR mh\-draft (5),
+.IR mh\-profile (5),
+.IR post (8)
+.SH DEFAULTS
+.nf
+.RB ` file "' defaults to <mh-dir>/draft"
+.RB ` \-nocheck '
+.RB ` \-alias "' defaults to  %nmhetcdir%/MailAliases"
+.fi
+.SH CONTEXT
+None
+.SH BUGS
+With the
+.B \-check
+option,
+.B whom
+makes no guarantees that the
+addresses listed as being ok are really deliverable, rather, an address
+being listed as ok means that at the time that
+.B whom
+was run
+the address was thought to be deliverable by the transport service.
+For local addresses, this is absolute; for network addresses, it means
+that the host is known; for uucp addresses, it (often) means that the
+.B UUCP
+network is available for use.

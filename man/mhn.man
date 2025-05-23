@@ -1,0 +1,54 @@
+.TH MHN %manext1% 2013-01-04 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+mhn \- display/list/store nmh MIME messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B mhn
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RI [ msgs ]
+.RB [ \-file
+.IR file ]
+.RB [ \-part
+.IR number ]
+\&...
+.RB [ \-type
+.IR content ]
+\&...
+.RB [ \-show " | " \-noshow ]
+.RB [ \-list " | " \-nolist ]
+.RB [ \-store " | " \-nostore ]
+.RB [ \-headers " | " \-noheaders ]
+.RB [ \-realsize " | " \-norealsize ]
+.RB [ \-serialonly " | " \-noserialonly ]
+.RB [ \-form
+.IR formfile ]
+.RB [ \-pause " | " \-nopause ]
+.RB [ \-auto " | " \-noauto ]
+.PP
+.HP 5
+.B mhn
+.B \-build
+.I file
+.RB [ \-rfc934mode " | " \-norfc934mode ]
+.ad
+.SH DESCRIPTION
+.B mhn
+is deprecated.  It is retained only
+for backwards compatibility.
+.PP
+You should migrate to using the
+commands
+.BR mhlist ,
+.BR mhshow ,
+and
+.BR mhstore .
+.SH "SEE ALSO"
+.IR mhlist (1),
+.IR mhshow (1),
+.IR mhstore (1)

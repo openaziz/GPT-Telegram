@@ -1,0 +1,140 @@
+#!/bin/sh
+######################################################
+#
+# Test etcpath() in path.c.
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "${MH_OBJ_DIR}/test/common.sh"
+
+setup_test
+
+expected="$MH_TEST_DIR/test-etcpath$$.expected"
+expected_err="$MH_TEST_DIR/test-etcpath$$.expected_err"
+actual="$MH_TEST_DIR/test-etcpath$$.actual"
+actual_err="$MH_TEST_DIR/test-etcpath$$.actual_err"
+
+nonexistent_user()
+{
+    user=XXXX
+    while id $user >/dev/null 2>&1; do
+        user=${user}X
+    done
+    printf %s $user
+}
+nonexistent_file()
+{
+    dir="$1"
+    file="$dir/XXXX"
+    while test -e "$file"; do
+        file="${file}X"
+    done
+    printf %s "$file"
+}
+
+#### These tests use mhical but not for what it does.  Its -form switch
+#### relies on etcpath(), via new_fs().
+#### $HOME is $MH_TEST_DIR so we know what's in it, and can add files to it.
+
+# absolute path
+start_test 'absolute path'
+cat >"$expected_err" <<EOF
+mhical: unable to open format file $HOME/absolute: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "$HOME/absolute" >"$actual" 2>"$actual_err" ||
+    true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# existent ~/file
+start_test 'existent ~/file'
+touch "$HOME/file"
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form '~/file' >"$actual" 2>"$actual_err" || true
+check /dev/null "$actual" 'keep first'
+check /dev/null "$actual_err" 'keep first'
+rm -f "$HOME/file"
+
+# nonexistent ~/file
+start_test 'nonexistent ~/file'
+#### common.sh sets HOME to MH_TEST_DIR so we control what's in $HOME.
+file='file_that_does_not_exist'
+cat >"$expected_err" <<EOF
+mhical: unable to open format file ~/$file: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "~/$file" >"$actual" 2>"$actual_err" || true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# existent user (exercise successful getpwnam(3) branch in etcpath())
+start_test 'existent user'
+user=`id -nu`
+file=`nonexistent_file $user`
+cat >"$expected_err" <<EOF
+mhical: unable to open format file ~$file: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "~$file" >"$actual" 2>"$actual_err" || true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# nonexistent user (exercise failed getpwnam(3) branch in etcpath())
+start_test 'nonexistent user'
+user=$(nonexistent_user)
+cat >"$expected_err" <<EOF
+mhical: unable to open format file ~$user/mhical.24hour: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "~$user/mhical.24hour" >"$actual" 2>"$actual_err" ||
+    true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# nonexistent user without a file
+# This caused a seg fault with sbr/path.c commit cd2c6750fba54cd6d938106ecd122e8976792b6e.
+start_test 'nonexistent user without a file'
+user=$(nonexistent_user)
+cat >"$expected_err" <<EOF
+mhical: unable to open format file ~$user: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "~$user" >"$actual" 2>"$actual_err" ||
+    true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# file in Mail dir
+start_test 'file in Mail dir'
+file="${MH_TEST_DIR}/Mail/file"
+cat >"$expected_err" <<EOF
+mhical: unable to open format file $file: No such file or directory
+EOF
+printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+    $NMH_TEST_PREFIX mhical -form "$file" >"$actual" 2>"$actual_err" || true
+check /dev/null "$actual" 'keep first'
+check "$expected_err" "$actual_err"
+
+# file in nmh etcdir
+# This only works if nmh was installed, so that `mhparam etcdir`/mhical.24hour
+# exists.  "make distcheck" installs nmh, so it will be used with that.
+if [ -e `mhparam etcdir`/mhical.24hour ]; then
+    start_test 'file in nmh etcdir'
+    rm -f "${MH_TEST_DIR}/Mail/mhical.24hour"
+    printf 'BEGIN:VCALENDAR\nEND:VCALENDAR\n' |
+        $NMH_TEST_PREFIX mhical -form mhical.24hour >"$actual" 2>"$actual_err" || true
+    check /dev/null "$actual" 'keep first'
+    check /dev/null "$actual_err" 'keep first'
+fi
+
+
+finish_test
+exit $failed

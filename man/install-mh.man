@@ -1,0 +1,92 @@
+.TH INSTALL-MH %manext1% 2022-12-22 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+install-mh \- initialize the nmh environment
+.SH SYNOPSIS
+.HP 5
+.na
+.B %nmhlibexecdir%/install\-mh
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-auto ]
+.RB [ \-check ]
+.ad
+.SH DESCRIPTION
+.B install\-mh
+creates the initial setup for a first-time
+.B nmh
+user.
+.B install\-mh
+is installed in two locations for historical reasons.
+.PP
+The \fB\-auto\fP switch does things as automatically as possible and
+makes \fBinstall\-mh\fP less chatty.
+.PP
+The user is prompted for the name of the directory to be
+designated as the user's
+.B nmh
+directory.  If this directory does not exist, the user is asked if
+it should be created.  Normally, this directory should be under
+the user's home directory, and has the default name of
+\fI`Mail'\fP.
+.B install\-mh
+writes an initial
+.I \&.mh_profile
+for the user.
+.PP
+As with all
+.B nmh
+commands,
+.B install\-mh
+first checks for the existence of the \fB$MH\fP environment variable,
+since that, if set, gives the profile path.
+If it isn't set, the
+.B $HOME
+environment variable is consulted to determine the user's home directory.
+If
+.B $HOME
+is not set, then the
+.I /etc/passwd
+file is consulted.
+.PP
+When creating the user's
+.IR \&.mh_profile ,
+.B install\-mh
+will check for the existence of a global profile at
+.IR %nmhetcdir%/mh.profile .
+If found, this will be used to initialize the new
+.IR \&.mh_profile .
+.PP
+The \fB\-check\fP switch checks if
+.B nmh
+is installed.
+(This can be used by other programs to determine if
+.B nmh
+has been installed.)
+.PP
+.B install\-mh
+sets up the user's profile to support the
+.IR mh\-draft (5)
+draft folder facility.
+.SH FILES
+.PD 0
+.TP 20
+$HOME/.mh_profile
+The user's profile.
+.TP
+%nmhetcdir%/mh.profile
+Used to initialize user's profile.
+.PD
+.SH "PROFILE COMPONENTS"
+.TP 20
+Path:
+To set the user's nmh directory.
+.SH "SEE ALSO"
+.IR mh\-draft (5)
+.SH CONTEXT
+With
+.BR \-auto ,
+the current folder is changed to
+.RI \*(lq inbox \*(rq.

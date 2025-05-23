@@ -1,0 +1,314 @@
+.TH WHATNOW %manext1% 2022-12-22 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+whatnow \- prompting front-end for writing nmh messages
+.SH SYNOPSIS
+.HP 5
+.na
+.B whatnow
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-draftfolder
+.IR +folder ]
+.RB [ \-draftmessage
+.IR msg ]
+.RB [ \-nodraftfolder ]
+.RB [ \-editor
+.IR editor ]
+.RB [ \-noedit ]
+.RB [ \-prompt
+.IR string ]
+.RI [ file ]
+.ad
+.SH DESCRIPTION
+.B whatnow
+is the default program that queries the user about
+the disposition of a composed draft.  It is normally automatically
+invoked by one of the
+.B nmh
+commands
+.BR comp ,
+.BR dist ,
+.BR forw ,
+or
+.B repl
+after the initial edit.
+.PP
+When started, the editor is started on the draft (unless
+.B \-noedit
+is given, in which case the initial edit is suppressed).  Then,
+.B whatnow
+repetitively prompts the user with \*(lqWhat now?\*(rq
+and awaits a response.  The valid responses are:
+.PP
+.RS 5
+.TP
+.B edit
+Re-edit using the same editor that was used on the preceding round
+unless a profile entry \*(lq<lasteditor>\-next: <editor>\*(rq names an
+alternate editor.
+.TP
+\fBedit\fP \fIeditor\fP
+Invoke
+.I editor
+for further editing.
+.TP
+\fBrefile\fP \fI+folder\fP
+Refile the draft into
+.I folder .
+.TP
+.B mime
+Process the draft as a MIME composition file using the
+.I buildmimeproc
+command which defaults to
+.IR mhbuild (1).
+.TP
+.B display
+List the message being replied to or distributed on the terminal.
+.TP
+.B list
+List the draft on the terminal.
+.TP
+.B send
+Send the message.
+.TP
+.B send \-watch
+Send the message and monitor the delivery process.
+.TP
+.B push
+Send the message in the background.
+.TP
+.B whom
+List the addresses to whom the message will go.
+.TP
+.B whom \-check
+List the addresses and verify that they are acceptable to the transport
+service.
+.TP
+.B quit
+Preserve the draft and exit.
+.TP
+.B quit \-delete
+Delete the draft and exit.
+.TP
+.B delete
+Delete the draft and exit.
+.TP
+\fBcd\fP \fIdirectory\fP
+Use
+.I directory
+when interpreting attachment file names.
+This does not change
+.IR whatnow 's
+process's current working directory so it and child processes,
+e.g.\&
+.IR edit 's,
+do not see the change.
+.TP
+.B pwd
+Print the working directory for attachment files.
+.TP
+\fBls\fP [\fIls-options\fP\^]
+List files in the attachment working directory using
+.IR ls (1).
+.TP
+\fBattach [-v]\fP \fIfiles\fP
+Add the named files to the message as MIME attachments;
+.B \-v
+displays the
+.IR mhbuild (1)
+directive that
+.IR send (1)
+will use.
+.TP
+.B alist [-ln]
+List the MIME attachments' filenames.
+.B \-l
+gives a long listing showing their full path.
+.B \-n
+numbers them for use with
+.B detach .
+.TP
+\fBdetach [-n]\fP \fIfiles-or-numbers\fP
+Remove MIME attachments, either by file name or by number with
+.BR \-n .
+.RE
+.PP
+When entering your response, you need only type enough characters
+to uniquely identify the response.
+.PP
+For the
+.B edit
+response, any valid switch to the editor is valid.
+.PP
+For the
+.B send
+and
+.B push
+responses, any valid switch to
+.IR send (1)
+is valid (as
+.B push
+merely invokes
+.B send
+with the
+.B \-push
+option).
+.PP
+For the
+.B whom
+response, any valid switch to
+.IR whom (1)
+is valid.
+.PP
+For the
+.B refile
+response, any valid switch to the
+.I fileproc
+is valid.
+.PP
+For the
+.B display
+and
+.B list
+responses, any valid argument to
+the
+.I lproc
+is valid.  If any non-switch arguments are present, then
+the pathname of the draft will be excluded from the argument list given
+to the
+.I lproc
+(this is useful for listing another
+.B nmh
+message).
+.PP
+See
+.IR mh\-profile (5)
+for further information about how editors
+are used by
+.BR nmh .
+It also discusses how environment variables can be
+used to direct
+.BR whatnow 's
+actions in complex ways.
+.PP
+The
+.B \-prompt
+.I string
+switch sets the prompting string for
+.BR whatnow .
+.PP
+The
+.B \-draftfolder
+.I +folder
+and
+.B \-draftmessage
+.I msg
+switches invoke
+the
+.B nmh
+draft folder facility.  This is an advanced (and highly
+useful) feature.  Consult
+.IR mh-draft (5)
+for more
+information.
+.PP
+If your
+.B nmh
+was configured with readline enabled, you'll be able to use filename
+completion and other readline features at the prompt.  These are
+particularly useful with the
+.BR cd ,
+.BR ls ,
+.BR attach ,
+and
+.B detach
+commands for managing MIME attachments.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+^<mh-dir>/draft~^The draft file
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Draft\-Folder:~^To specify the default draftfolder
+^Editor:~^To override the default editor
+^<lasteditor>\-next:~^To name an editor to be used after exit
+^~^from <lasteditor>
+^buildmimeproc:~^Program to translate MIME composition files
+^fileproc:~^Program to refile the message
+^lproc:~^Program to list the contents of a message
+^sendproc:~^Program to use to send the message
+^whomproc:~^Program to determine who a message would go to
+.fi
+.SH "SEE ALSO"
+.IR mh\-draft (5),
+.IR send (1),
+.IR whom (1)
+.SH DEFAULTS
+.nf
+.RB ` \-prompt "' defaults to \*(lqWhat\ Now?\ \*(rq"
+.fi
+.SH BUGS
+If the initial edit fails,
+.B whatnow
+deletes your draft (by renaming
+it with a site-dependent prefix (usually a comma);
+failure of a later edit preserves the draft.
+.PP
+If the
+.I buildmimeproc
+fails (returns a nonzero status),
+.B whatnow
+simply prints a \*(lqWhat now?\*(rq prompt.
+.B whatnow
+depends on the
+.I buildmimeproc
+to tell the user that something went wrong.
+.PP
+If
+.I whatnowproc
+is
+.BR whatnow ,
+then
+.BR comp ,
+.BR dist ,
+.BR forw ,
+and
+.B repl
+use a built-in
+.BR whatnow ,
+and do not actually run the
+.B whatnow
+program.  Hence, if you define your own
+.IR whatnowproc ,
+don't call it
+.B whatnow
+since it won't be run.
+.PP
+If
+.I sendproc
+is
+.BR send ,
+then
+.B whatnow
+uses a built-in
+.BR send ,
+it does not actually run the
+.B send
+program.  Hence, if
+you define your own
+.IR sendproc ,
+don't call it
+.B send
+since
+.B whatnow
+won't run it.

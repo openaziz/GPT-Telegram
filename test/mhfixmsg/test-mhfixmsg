@@ -1,0 +1,2318 @@
+#!/bin/sh
+######################################################
+#
+# Test mhfixmsg
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "${MH_OBJ_DIR}/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' mhfixmsg -
+
+#### Make sure that html-to-text conversion is what we expect.
+require_locale $en_locales
+
+expected="$MH_TEST_DIR/test-mhfixmsg$$.expected"
+expected_err="$MH_TEST_DIR/test-mhfixmsg$$.expected_err"
+actual="$MH_TEST_DIR/test-mhfixmsg$$.actual"
+actual_err="$MH_TEST_DIR/test-mhfixmsg$$.actual_err"
+
+mhn_defaults="$MH_INST_DIR${nmhetcdir}/mhn.defaults"
+
+if grep mhfixmsg-format-text/html "${mhn_defaults}" >/dev/null; then
+  can_reformat_texthtml=1
+  if grep 'mhfixmsg-format-text/html.*w3m' "${mhn_defaults}" >/dev/null; then
+    #### w3m uses $HOME/.w3m/, and creates it if it doesn't exist.  To
+    #### support testing with non-writeable $HOME, and to not leave
+    #### relics from this test if it is writeable but doesn't already
+    #### have a .w3m, and to not depend on whatever is in that if it
+    #### does already exist, overwrite $HOME if using w3m.
+    HOME="$MHTMPDIR"; export HOME
+  fi
+else
+  echo "$0: skipping -reformat check because no text browser was found"
+  can_reformat_texthtml=0
+fi
+
+
+# check -help
+start_test "-help"
+cat >"$expected" <<EOF
+Usage: mhfixmsg [+folder] [msgs] [switches]
+  switches are:
+  -decodetext 8bit|7bit|binary
+  -nodecodetext
+  -decodetypes
+  -decodeheaderfieldbodies charset
+  -nodecodeheaderfieldbodies
+  -[no]crlflinebreaks
+  -[no]textcharset
+  -[no]reformat
+  -[no]replacetextplain
+  -[no]fixboundary
+  -[no]fixcte
+  -[no]checkbase64
+  -fixtype mimetype
+  -file file
+  -outfile file
+  -rmmproc program
+  -normmproc
+  -[no]changecur
+  -[no]verbose
+  -version
+  -help
+EOF
+
+#### Skip nmh intro text.
+run_prog mhfixmsg -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+
+# check -version
+start_test "-version"
+case `mhfixmsg -version` in
+  mhfixmsg\ --*) ;;
+  *) printf '%s: mhfixmsg -version generated unexpected output\n' "$0" >&2
+     failed=`expr ${failed:-0} + 1`;;
+esac
+
+
+# check that non-MIME messages aren't modified
+# check -outfile
+start_test "non-MIME messages aren't modified, and -outfile"
+run_test 'mhfixmsg first -outfile '"$actual" ''
+check "`mhpath first`" "$actual" 'keep first'
+
+
+# check that non-MIME messages with no bodies aren't modified
+# check -outfile
+start_test "non-MIME messages with no bodies aren't modified, and -outfile"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: @test.nmh
+Subject: message with no body
+EOF
+
+run_test 'mhfixmsg last -outfile '"$actual" ''
+check "`mhpath last`" "$actual"
+
+
+# check -nofixcte
+start_test "-nofixcte"
+cat >"`mhpath new`" <<EOF
+From: Anon
+To: Mailinglist
+Subject: =?ISO-8859-15?Q?Re=3A_H=E5lla_linuxsystem_uppdaterade?=
+User-Agent: Alpine 2.00 (DEB 1167 2008-08-23)
+MIME-Version: 1.0
+Content-Type: MULTIPART/MIXED;
+    BOUNDARY="----=_NextPart_000_0000_00000000.00000000"
+Content-Transfer-Encoding: QUOTED-PRINTABLE
+
+  This message is in MIME format.  The first part should be readable
+text,
+  while the remaining parts are likely unreadable without MIME-aware
+tools.
+
+------=_NextPart_000_0000_00000000.00000000
+Content-Type: TEXT/PLAIN; CHARSET=ISO-8859-15
+Content-Transfer-Encoding: 8BIT
+
+Some text in swedish.
+
+Varf=C3=B6r inte anv=C3=A4nda...
+
+------=_NextPart_000_0000_00000000.00000000--
+
+And some text after the last part.
+EOF
+
+cp -p "$MH_TEST_DIR"/Mail/inbox/11 "$MH_TEST_DIR"/Mail/inbox/12
+
+run_test 'mhfixmsg last -nofixcte' ''
+check "$MH_TEST_DIR"/Mail/inbox/11 "$MH_TEST_DIR"/Mail/inbox/12 'keep first'
+
+
+# check -fixcte (enabled by default):  fixup of erroneous C-T-E in multipart
+# check -verbose
+start_test "-fixcte (enabled by default):  fixup of erroneous C-T-E in multipart, and -verbose"
+cat >"$expected" <<EOF
+From: Anon
+To: Mailinglist
+Subject: =?ISO-8859-15?Q?Re=3A_H=E5lla_linuxsystem_uppdaterade?=
+User-Agent: Alpine 2.00 (DEB 1167 2008-08-23)
+MIME-Version: 1.0
+Content-Type: MULTIPART/MIXED;
+    BOUNDARY="----=_NextPart_000_0000_00000000.00000000"
+Nmh-REPLACED-INVALID-Content-Transfer-Encoding: QUOTED-PRINTABLE
+Content-Transfer-Encoding: 8bit
+
+  This message is in MIME format.  The first part should be readable
+text,
+  while the remaining parts are likely unreadable without MIME-aware
+tools.
+
+------=_NextPart_000_0000_00000000.00000000
+Content-Type: TEXT/PLAIN; CHARSET=ISO-8859-15
+Content-Transfer-Encoding: 8BIT
+
+Some text in swedish.
+
+Varf=C3=B6r inte anv=C3=A4nda...
+
+------=_NextPart_000_0000_00000000.00000000--
+
+And some text after the last part.
+EOF
+
+run_test 'mhfixmsg last -outfile '"$actual"' -verbose' \
+         "mhfixmsg: 11, replace Content-Transfer-Encoding of \
+QUOTED-PRINTABLE with 8 bit"
+check "$expected" "$actual" 'keep first'
+
+sbackup="`mhparam sbackup`"
+
+# check with no options:  checks backup
+start_test "with no options:  checks backup"
+cp "$MH_TEST_DIR"/Mail/inbox/11 "$MH_TEST_DIR"/Mail/inbox/11.original
+folder last >/dev/null
+run_test 'mhfixmsg' ''
+check "$expected" "$MH_TEST_DIR"/Mail/inbox/11 'keep first'
+cp "$MH_TEST_DIR"/Mail/inbox/11.original "$MH_TEST_DIR"/Mail/inbox/11
+check "$MH_TEST_DIR/Mail/inbox/${sbackup}11" "$MH_TEST_DIR"/Mail/inbox/11.original
+
+
+# check backup with -file
+start_test "backup with -file"
+cp "$MH_TEST_DIR"/Mail/inbox/11 "$MH_TEST_DIR"/Mail/inbox/11.original
+folder last >/dev/null
+run_test 'mhfixmsg -file '"$MH_TEST_DIR"/Mail/inbox/11 ''
+check "$MH_TEST_DIR"/Mail/inbox/11 "$expected" 'keep first'
+check "$MH_TEST_DIR/Mail/inbox/${sbackup}11" "$MH_TEST_DIR"/Mail/inbox/11.original
+
+
+# check -file with directory
+start_test "-file with directory"
+run_test 'mhfixmsg -file /tmp' 'mhfixmsg: /tmp is a directory
+mhfixmsg: unable to parse message from file /tmp'
+
+
+# check -reformat (enabled by default):  addition of text/plain part
+# to solitary text/html part
+start_test "-reformat (enabled by default):  addition of text/plain part"
+prepare_space >"$expected" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: multipart/alternative; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain; charset="Windows-1252"
+Content-Transfer-Encoding: 7bit
+
+Need to go! Need ... to ... go!
+
+------=_nmh-multipart
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: 7bit
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=Windows-1252">
+<meta name="Generator" content="Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; padding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+<div>
+<div>Need to go! Need ... to ... go!</div>
+</body>
+</html>
+
+------=_nmh-multipart--
+EOF
+
+cat >"`mhpath new`" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-1=
+252">
+<meta name=3D"Generator" content=3D"Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; pad=
+ding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+<div>
+<div>Need to go! Need ... to ... go!</div>
+</body>
+</html>
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last -textcharset Windows-1252 -outfile - \
+           2>"$actual.err" | squeeze_lines >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check implicit -file with absolute pathname
+start_test "implicit -file with absolute pathname"
+run_test "mhfixmsg `mhpath last` -textcharset utf-8 -outfile /dev/null" ''
+
+
+# check handling of boundary string that appears in message body
+start_test "handling of boundary string that appears in message body"
+prepare_space >"$expected" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: multipart/alternative; boundary="----=_nmh-multipart-3"
+
+------=_nmh-multipart-3
+Content-Type: text/plain; charset="Windows-1252"
+Content-Transfer-Encoding: 7bit
+
+------=_nmh-multipart
+------=_nmh-multipart-1
+------=_nmh-multipart-2
+
+------=_nmh-multipart-3
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: 7bit
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=Windows-1252">
+<meta name="Generator" content="Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; padding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+------=_nmh-multipart<br>
+------=_nmh-multipart-1<br>
+------=_nmh-multipart-2<br>
+</body>
+</html>
+
+------=_nmh-multipart-3--
+EOF
+
+cat >"`mhpath last`" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-1=
+252">
+<meta name=3D"Generator" content=3D"Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; pad=
+ding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+------=3D_nmh-multipart<br>
+------=3D_nmh-multipart-1<br>
+------=3D_nmh-multipart-2<br>
+</body>
+</html>
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last -textcharset Windows-1252 -outfile - \
+           2>"$actual.err" | squeeze_lines >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check -nodecodetext
+start_test "-nodecodetext"
+prepare_space >"$expected" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: multipart/alternative; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain; charset="Windows-1252"
+Content-Transfer-Encoding: 7bit
+
+Need to go! Need ... to ... go!
+
+------=_nmh-multipart
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-=
+1252">
+<meta name=3D"Generator" content=3D"Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; pa=
+dding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+<div>
+<div>Need to go! Need ... to ... go!</div>
+</body>
+</html>
+
+------=_nmh-multipart--
+EOF
+
+cat >"$MH_TEST_DIR"/Mail/inbox/12 <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: bonquiqui@example.com
+Subject: rue
+Date: Sat, 26 Jan 2013 17:37:53 -0500
+Content-Type: text/html; charset="Windows-1252"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DWindows-1=
+252">
+<meta name=3D"Generator" content=3D"Microsoft Exchange Server">
+<!-- converted from text --><style><!-- .EmailQuote { margin-left: 1pt; pad=
+ding-left: 4pt; border-left: #800000 2px solid; } --></style>
+</head>
+<body>
+<div>
+<div>Need to go! Need ... to ... go!</div>
+</body>
+</html>
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last  -textcharset Windows-1252 -nodecodetext \
+           -outfile - 2>"$actual.err" | squeeze_lines >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check -decodetext (enabled by default)
+start_test "-decodetext (enabled by default)"
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 1
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"; name="test4.txt"
+Content-Disposition: attachment; filename="test4.txt"
+Content-Transfer-Encoding: 7bit
+
+This is a text/plain part.
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 1
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"; name="test4.txt"
+Content-Disposition: attachment; filename="test4.txt"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRleHQvcGxhaW4gcGFydC4K
+
+------- =_aaaaaaaaaa0--
+EOF
+
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+# check -decodetext with more complicated content structure
+start_test "-decodetext with more complicated content structure"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 2
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+This is additional content before the first subpart of the multipart.
+
+------- =_aaaaaaaaaa0
+Content-Type: multipart/related;
+    type="text/plain"; boundary="subpart__1.1"
+
+--subpart__1.1
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+
+This is the first text/plain part, in a subpart.
+
+--subpart__1.1--
+
+This is additional content after the last subpart of the multipart.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test2.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: 7bit
+
+This is the second text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test3.txt"
+
+This is the third text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"; name="test4.txt"
+Content-Disposition: attachment; filename="test4.txt"
+Content-Transfer-Encoding: 7bit
+
+This is the fourth text/plain part.
+
+------- =_aaaaaaaaaa0--
+
+This is additional content after the last subpart of the multipart.
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 2
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+This is additional content before the first subpart of the multipart.
+
+------- =_aaaaaaaaaa0
+Content-Type: multipart/related;
+    type="text/plain"; boundary="subpart__1.1"
+
+--subpart__1.1
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+
+This is the first text/plain part, in a subpart.
+
+--subpart__1.1--
+
+This is additional content after the last subpart of the multipart.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test2.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: quoted-printable
+
+This is the second text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test3.txt"
+
+This is the third text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"; name="test4.txt"
+Content-Disposition: attachment; filename="test4.txt"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyB0aGUgZm91cnRoIHRleHQvcGxhaW4gcGFydC4K
+
+------- =_aaaaaaaaaa0--
+
+This is additional content after the last subpart of the multipart.
+EOF
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+# check attempted (default, 8 bit) -decodetext of binary text
+#### Generated the encoded text below with:
+####   $ printf '\275\262=\274\000\n' | base64
+start_test "attempted (default, 8 bit) -decodetext of binary text"
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg binary decode test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="UTF-8"; name="nul+square.txt"
+Content-Transfer-Encoding: base64
+
+vbI9vAAK
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cp -p "`mhpath last`" "$expected"
+run_prog mhfixmsg last
+check "`mhpath last`" "$expected" 'keep first'
+
+
+# check for successful decode of a different part with attempted -decodetext
+# of binary (>998 characters) text
+start_test "for successful decode of a different part with attempted -decodetext"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg successful decode of text/plain with failed binary decode
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+
+This is a text plain part
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="ascii"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline
+
+PGh0bWw+PGhlYWQ+PHRpdGxlPmxvbmcgbGluZTwvdGl0bGU+PC9oZWFkPjxib2R5PlRoaXMgbGlu
+ZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBhcnQg
+c2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTggY2hh
+cmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQuICBU
+aGlzIGxpbmUgaXMgZ3JlYXRlciB0aGFuIDk5OCBjaGFyYWN0ZXJzIGluIGxlbmd0aCwgc28gdGhp
+cyBwYXJ0IHNob3VsZCBub3QgYmUgZGVjb2RlZC4gIFRoaXMgbGluZSBpcyBncmVhdGVyIHRoYW4g
+OTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBhcnQgc2hvdWxkIG5vdCBiZSBkZWNv
+ZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTggY2hhcmFjdGVycyBpbiBsZW5ndGgs
+IHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQuICBUaGlzIGxpbmUgaXMgZ3JlYXRl
+ciB0aGFuIDk5OCBjaGFyYWN0ZXJzIGluIGxlbmd0aCwgc28gdGhpcyBwYXJ0IHNob3VsZCBub3Qg
+YmUgZGVjb2RlZC4gIFRoaXMgbGluZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4g
+bGVuZ3RoLCBzbyB0aGlzIHBhcnQgc2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlz
+IGdyZWF0ZXIgdGhhbiA5OTggY2hhcmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91
+bGQgbm90IGJlIGRlY29kZWQuICBUaGlzIGxpbmUgaXMgZ3JlYXRlciB0aGFuIDk5OCBjaGFyYWN0
+ZXJzIGluIGxlbmd0aCwgc28gdGhpcyBwYXJ0IHNob3VsZCBub3QgYmUgZGVjb2RlZC4gIFRoaXMg
+bGluZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBh
+cnQgc2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTgg
+Y2hhcmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQu
+ICA8L2JvZHk+PC9odG1sPg==
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg successful decode of text/plain with failed binary decode
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIHRleHQgcGxhaW4gcGFydAo=
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="ascii"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline
+
+PGh0bWw+PGhlYWQ+PHRpdGxlPmxvbmcgbGluZTwvdGl0bGU+PC9oZWFkPjxib2R5PlRoaXMgbGlu
+ZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBhcnQg
+c2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTggY2hh
+cmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQuICBU
+aGlzIGxpbmUgaXMgZ3JlYXRlciB0aGFuIDk5OCBjaGFyYWN0ZXJzIGluIGxlbmd0aCwgc28gdGhp
+cyBwYXJ0IHNob3VsZCBub3QgYmUgZGVjb2RlZC4gIFRoaXMgbGluZSBpcyBncmVhdGVyIHRoYW4g
+OTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBhcnQgc2hvdWxkIG5vdCBiZSBkZWNv
+ZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTggY2hhcmFjdGVycyBpbiBsZW5ndGgs
+IHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQuICBUaGlzIGxpbmUgaXMgZ3JlYXRl
+ciB0aGFuIDk5OCBjaGFyYWN0ZXJzIGluIGxlbmd0aCwgc28gdGhpcyBwYXJ0IHNob3VsZCBub3Qg
+YmUgZGVjb2RlZC4gIFRoaXMgbGluZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4g
+bGVuZ3RoLCBzbyB0aGlzIHBhcnQgc2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlz
+IGdyZWF0ZXIgdGhhbiA5OTggY2hhcmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91
+bGQgbm90IGJlIGRlY29kZWQuICBUaGlzIGxpbmUgaXMgZ3JlYXRlciB0aGFuIDk5OCBjaGFyYWN0
+ZXJzIGluIGxlbmd0aCwgc28gdGhpcyBwYXJ0IHNob3VsZCBub3QgYmUgZGVjb2RlZC4gIFRoaXMg
+bGluZSBpcyBncmVhdGVyIHRoYW4gOTk4IGNoYXJhY3RlcnMgaW4gbGVuZ3RoLCBzbyB0aGlzIHBh
+cnQgc2hvdWxkIG5vdCBiZSBkZWNvZGVkLiAgVGhpcyBsaW5lIGlzIGdyZWF0ZXIgdGhhbiA5OTgg
+Y2hhcmFjdGVycyBpbiBsZW5ndGgsIHNvIHRoaXMgcGFydCBzaG91bGQgbm90IGJlIGRlY29kZWQu
+ICA8L2JvZHk+PC9odG1sPg==
+
+------- =_aaaaaaaaaa0--
+EOF
+
+run_prog mhfixmsg -noreformat last
+check "`mhpath last`" "$expected" 'keep first'
+
+
+# check for successful decode of a different part with -decodetext of binary
+# (>998 characters) text
+start_test "for successful decode of a different part with -decodetext of binary"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg successful decode of text/plain with failed binary decode
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+Content-Transfer-Encoding: binary
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+
+This is a text plain part
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="ascii"
+Content-Transfer-Encoding: binary
+Content-Disposition: inline
+
+<html><head><title>long line</title></head><body>This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  This line is greater than 998 characters in length, so this part should not be decoded.  </body></html>
+
+------- =_aaaaaaaaaa0--
+EOF
+
+run_prog mhfixmsg -noreformat -decodetext binary last
+check "`mhpath last`" "$expected"
+
+
+# check -decodetext of binary (containing ASCII NUL) text
+start_test "-decodetext of binary (containing ASCII NUL) text"
+printf "%s\275\262=\274\000%s" "To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg binary decode test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=\"----- =_aaaaaaaaaa0\"
+Content-Transfer-Encoding: binary
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset=\"UTF-8\"; name=\"nul+square.txt\"
+Content-Transfer-Encoding: binary
+
+" "
+
+------- =_aaaaaaaaaa0--
+" >"$expected"
+mhfixmsg last -decodetext binary -outfile "$actual"
+check "$expected" "$actual"
+
+
+# check that -reformat succeeds when decode of binary text fails
+start_test "-reformat succeeds when decode of binary text fails"
+prepare_space >"$expected" <<'EOF'
+MIME-Version: 1.0
+Date: Thu, 11 Apr 2013 02:47:08 -0700
+To: <me@example.com>
+From: <sender@example.com>
+Subject: body requires binary encoding
+Content-Type: multipart/alternative; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain; charset="ISO-8859-1"
+Content-Transfer-Encoding: 7bit
+
+Mile                                     $0.00
+Time                                    $78.71
+State Tax                                $5.90
+Vehicle License Fee                      $1.84
+State Txn Tax                            $6.00
+
+------=_nmh-multipart
+Content-Type: text/html; charset="ISO-8859-1"
+Content-Transfer-Encoding: quoted-printable
+
+<body>
+EOF
+
+cat >"`mhpath new`" <<'EOF'
+MIME-Version: 1.0
+Content-Type: text/html; charset="ISO-8859-1"
+Content-Transfer-Encoding: quoted-printable
+Date: Thu, 11 Apr 2013 02:47:08 -0700
+To: <me@example.com>
+From: <sender@example.com>
+Subject: body requires binary encoding
+
+<body>
+<table width=3D"325" border=3D"0" cellspacing=3D"0" cellpadding=3D"0">
+<tr><td><font face=3D"Arial, Helvetica, sans-serif" color=3D"#333333" size=
+=3D"2"><strong>Mile</strong></font></td><td height=3D"3">&nbsp;</td><td ali=
+gn=3D"right"><font face=3D"Arial, Helvetica, sans-serif" color=3D"#333333" =
+size=3D"2">$0.00</font></td></tr><tr><td><font face=3D"Arial, Helvetica, sa=
+ns-serif" color=3D"#333333" size=3D"2"><strong>Time</strong></font></td><td=
+ height=3D"3">&nbsp;</td><td align=3D"right"><font face=3D"Arial, Helvetica=
+, sans-serif" color=3D"#333333" size=3D"2">$78.71</font></td></tr><tr><td><=
+font face=3D"Arial, Helvetica, sans-serif" color=3D"#333333" size=3D"2"><st=
+rong>State Tax</strong></font></td><td height=3D"3">&nbsp;</td><td align=3D=
+"right"><font face=3D"Arial, Helvetica, sans-serif" color=3D"#333333" size=
+=3D"2">$5.90</font></td></tr><tr><td><font face=3D"Arial, Helvetica, sans-s=
+erif" color=3D"#333333" size=3D"2"><strong>Vehicle License Fee</strong></fo=
+nt></td><td height=3D"3">&nbsp;</td><td align=3D"right"><font face=3D"Arial=
+, Helvetica, sans-serif" color=3D"#333333" size=3D"2">$1.84</font></td></tr=
+><tr><td><font face=3D"Arial, Helvetica, sans-serif" color=3D"#333333" size=
+=3D"2"><strong>State Txn Tax</strong></font></td><td height=3D"3">&nbsp;</t=
+d><td align=3D"right"><font face=3D"Arial, Helvetica, sans-serif" color=3D"=
+#333333" size=3D"2">$6.00</font></td></tr>
+
+</body>
+</html>
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  #### Truncate to avoid comparing the html portion because it can
+  #### get reformatted.
+  run_prog mhfixmsg last -textcharset ISO-8859-1 -outfile - | \
+      squeeze_lines | head -22 >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  cp -p "$MH_TEST_DIR/Mail/inbox/15" "$MH_TEST_DIR/Mail/inbox/15.backup"
+  rm -f "$expected"
+fi
+
+
+# check -textcharset
+# Also checks preservation of attributes after one (charset) that is
+# modified.
+start_test "-textcharset"
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg textcharset test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+Content-Transfer-Encoding: 8bit
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="utf-8"; name="square.txt"
+Content-Disposition: attachment; filename="square.txt"
+Content-Transfer-Encoding: 8bit
+
+½²=¼
+
+------- =_aaaaaaaaaa0--
+EOF
+
+#### Generated the encoded text below with:
+####   $ printf '\275\262=\274\n' | base64
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg textcharset test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"; name="square.txt"
+Content-Disposition: attachment; filename="square.txt"
+Content-Transfer-Encoding: base64
+
+vbI9vAo=
+
+------- =_aaaaaaaaaa0--
+EOF
+
+if test "$ICONV_ENABLED" -eq 1; then
+  run_prog mhfixmsg last -textcharset utf-8 -outfile "$actual" 2>&1
+  check "$expected" "$actual" 'keep first'
+else
+  echo "$0: skipping -textcharset check because nmh was built without iconv"
+  rm -f "$expected"
+fi
+
+
+# check -textcharset -verbose
+start_test "-textcharset -verbose"
+cat >"$expected.err" <<EOF
+mhfixmsg: 17 part 1, decode text/plain; charset="iso-8859-1"; name="square.txt"
+mhfixmsg: 17 part 1, convert iso-8859-1 to utf-8
+EOF
+
+if test "$ICONV_ENABLED" -eq 1; then
+  run_prog mhfixmsg last -textcharset utf-8 -outfile "$actual" -verbose \
+           2>"$actual.err"
+  check "$expected" "$actual"
+  check "$expected.err" "$actual.err"
+else
+    echo "$0: skipping -textcharset -verbose check because nmh was built " \
+         "without iconv"
+  rm -f "$expected" "$expected.err"
+fi
+
+
+# check -nofixboundary
+start_test "-nofixboundary"
+cat >"$expected" <<EOF
+EOF
+
+cat >"`mhpath new`" <<EOF
+Date: Fri, 13 May 2011 08:21:12 -0500
+Content-Type: multipart/alternative;
+        boundary="----=_NextPart_000_1781A17_01CC1147.81E9467A"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+From: <sender@example.com>
+To: <recipient@example.com>
+Subject: mhfixmsg bad boundary test
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_1781A1A_01CC1147.81EBA8D4
+Content-Type: text/plain
+
+The boundaries of this part don't match the header boundary.
+
+------=_NextPart_000_1781A1A_01CC1147.81EBA8D4--
+EOF
+
+cp -p "`mhpath last`" "`mhpath new`"
+
+run_test 'mhfixmsg last -nofixboundary' ''
+check "$MH_TEST_DIR"/Mail/inbox/18 "$MH_TEST_DIR"/Mail/inbox/19 'keep first'
+
+
+# check that message is not output when fed through stdin (without -outfile)
+start_test "message is not output when fed through stdin"
+run_prog mhfixmsg -file - -verbose <`mhpath last` >"$actual" 2>"$actual.err"
+check "$expected" "$actual"
+if grep "mhfixmsg: $MH_TEST_DIR/Mail/.*, fix multipart boundary" \
+   "$actual.err" >/dev/null; then
+  rm -f "$actual.err"
+else
+  echo "$0: test failed, output is in $actual.err."
+  failed=`expr ${failed:-0} + 1`
+fi
+
+
+# check fixup of erroneous boundary in multipart (-fixboundary,
+# enabled by default)
+# check -verbose
+start_test "fixup of erroneous boundary in multipart (-fixboundary, enabled by default)"
+cat >"$expected" <<EOF
+Date: Fri, 13 May 2011 08:21:12 -0500
+Content-Type: multipart/alternative;
+	boundary="----=_NextPart_000_1781A1A_01CC1147.81EBA8D4"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+From: <sender@example.com>
+To: <recipient@example.com>
+Subject: mhfixmsg bad boundary test
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_1781A1A_01CC1147.81EBA8D4
+Content-Type: text/plain
+
+The boundaries of this part don't match the header boundary.
+
+------=_NextPart_000_1781A1A_01CC1147.81EBA8D4--
+EOF
+
+run_test 'mhfixmsg last -outfile '"$actual"' -verbose' \
+         "mhfixmsg: 18, fix multipart boundary"
+check "$expected" "$actual"
+
+
+# check that message is not modified when -fixboundary fails
+start_test "message is not modified when -fixboundary fails"
+cat >"`mhpath new`" <<EOF
+Date: Fri, 13 May 2011 08:21:12 -0500
+Content-Type: multipart/alternative;
+        boundary="----=_ NextPart_000_1781A17_01CC1147.81E9467A"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+From: <sender@example.com>
+To: <recipient@example.com>
+Subject: mhfixmsg bad boundary test
+
+This is a multi-part message in MIME format.
+
+------=_ NextPart_000_1781A1A_01CC1147.81EBA8D4
+Content-Type: text/plain
+
+The boundary below doesn't match the header boundary.
+
+------=_
+NextPart_000_1781A1A_01CC1147.81EBA8D4--
+EOF
+
+cp -p "`mhpath last`" "$expected"
+run_test "mhfixmsg last -outfile $actual" ''
+check "$expected" "$actual"
+
+
+# check that text/plain part is not added to text/html in multipart/related
+# when it shouldn't be
+start_test "text/plain part is not added to text/html in multipart/related when it shouldn't be"
+cat >"`mhpath new`" <<EOF
+MIME-Version: 1.0
+Date: Tue, 26 Feb 2013 18:07:20 -0600
+Subject: multipart/related, not /alternative
+Content-Type: multipart/related;
+        type="text/html"; boundary="----=_Part_90310_101292502.1"
+
+------=_Part_90310_101292502.1
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+<html><head>
+    <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
+    <title>HTML Content</title>
+  </head>
+  <body>
+    This is the real content.
+  </body>
+</html>
+
+------=_Part_90310_101292502.1
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+Your email client does not support HTML messages
+
+------=_Part_90310_101292502.1--
+EOF
+
+cp -p "`mhpath last`" "$expected"
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last -outfile - | squeeze_lines >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check that text/plain part is added to text/html in multipart/related
+# when it should be
+start_test "text/plain part is added to text/html in multipart/related when it should be"
+cat >"$expected" <<EOF
+MIME-Version: 1.0
+Date: Tue, 26 Feb 2013 18:07:20 -0600
+Subject: multipart/related, not /alternative
+Content-Type: multipart/alternative; boundary="----=_Part_90310_101292502.1"
+
+------=_Part_90310_101292502.1
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+This is the real content.
+
+------=_Part_90310_101292502.1
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+<html><head>
+    <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
+    <title>HTML Content</title>
+  </head>
+  <body>
+    This is the real content.
+  </body>
+</html>
+
+------=_Part_90310_101292502.1--
+EOF
+
+cat >"`mhpath new`" <<EOF
+MIME-Version: 1.0
+Date: Tue, 26 Feb 2013 18:07:20 -0600
+Subject: multipart/related, not /alternative
+Content-Type: multipart/related;
+        type="text/html"; boundary="----=_Part_90310_101292502.1"
+
+------=_Part_90310_101292502.1
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+<html><head>
+    <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
+    <title>HTML Content</title>
+  </head>
+  <body>
+    This is the real content.
+  </body>
+</html>
+
+------=_Part_90310_101292502.1--
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last -textcharset us-ascii  -outfile - \
+      | squeeze_lines >"$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check handling of rfc822 message type
+# also, checks -fixboundary
+start_test "handling of rfc822 message type"
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: @test.nmh
+Subject: message with message/rfc822 attachment
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+and some garbage before the attachment
+
+------- =_aaaaaaaaaa0
+Content-Type: message/rfc822; name="1552"; charset="us-ascii"
+Content-Description: 1552
+Content-Disposition: attachment; filename="1552"
+
+From: Test <test@example.com>
+To: <another_user@example.com>
+Date: Thu, 28 Sep 2006 00:00:00
+Message-Id: @test.nmh
+Subject: message/rfc822 attachment
+
+This is an RFC-822 message.
+
+------- =_aaaaaaaaaa0--
+
+and some garbage at the end
+EOF
+
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: @test.nmh
+Subject: message with message/rfc822 attachment
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =badboundary"
+
+and some garbage before the attachment
+
+------- =_aaaaaaaaaa0
+Content-Type: message/rfc822; name="1552"; charset="us-ascii"
+Content-Description: 1552
+Content-Disposition: attachment; filename="1552"
+
+From: Test <test@example.com>
+To: <another_user@example.com>
+Date: Thu, 28 Sep 2006 00:00:00
+Message-Id: @test.nmh
+Subject: message/rfc822 attachment
+
+This is an RFC-822 message.
+
+------- =_aaaaaaaaaa0--
+
+and some garbage at the end
+EOF
+
+run_test 'mhfixmsg last -outfile '"$actual" ''
+check "$expected" "$actual"
+
+
+# check not stripping of CRs from ASCII text context (default)
+start_test "not stripping of CRs from ASCII text context (default)"
+cat >"$expected" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: recipient@example.com
+Subject: message with CR's
+Date: Mon, 29 Apr 2013 11:51:45 -0400
+
+There are two CR-LF pairs at the end of this sentence.
+
+EOF
+
+cat >"`mhpath new`" <<'EOF'
+MIME-Version: 1.0
+From: sender@example.com
+To: recipient@example.com
+Subject: message with CR's
+Date: Mon, 29 Apr 2013 11:51:45 -0400
+
+There are two CR-LF pairs at the end of this sentence.
+
+EOF
+
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+# check stripping of CRs from ASCII text context
+start_test "stripping of CRs from ASCII text context"
+cat >"$expected" <<EOF
+MIME-Version: 1.0
+From: sender@example.com
+To: recipient@example.com
+Subject: message with CR's
+Date: Mon, 29 Apr 2013 11:51:45 -0400
+
+There were two CR-LF pairs at the end of this sentence.
+
+EOF
+
+cat >"`mhpath new`" <<'EOF'
+MIME-Version: 1.0
+From: sender@example.com
+To: recipient@example.com
+Subject: message with CR's
+Date: Mon, 29 Apr 2013 11:51:45 -0400
+
+There were two CR-LF pairs at the end of this sentence.
+
+EOF
+
+run_prog mhfixmsg last -outfile "$actual" -nocrlflinebreaks
+check "$expected" "$actual"
+
+
+# check -replacetextplain
+start_test "-replacetextplain"
+prepare_space >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg replacement of bad text/plain part test
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_876302"
+
+------=_Part_876302
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Yes, the text/plain part really was empty.
+
+------=_Part_876302
+Content-Type: text/html; charset="UTF-8"
+Content-Disposition: inline
+
+<html><head>
+<title>eticket</title>
+</head>
+<body>
+  Yes, the text/plain part really was empty.
+</body>
+</html>
+
+------=_Part_876302--
+EOF
+
+cat >"`mhpath new`" <<'EOF'
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg replacement of bad text/plain part test
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_876302"
+
+------=_Part_876302
+Content-Type: text/plain; charset="iso-8859-15"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+
+
+------=_Part_876302
+Content-Type: text/html; charset="UTF-8"
+Content-Disposition: inline
+
+<html><head>
+<title>eticket</title>
+</head>
+<body>
+  Yes, the text/plain part really was empty.
+</body>
+</html>
+
+------=_Part_876302--
+EOF
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  #### lynx inserts multiple blank lines, so squeeze them.
+  run_prog mhfixmsg last -textcharset utf-8 -replacetextplain -outfile - | \
+    squeeze_lines > "$actual"
+  check "$expected" "$actual" 'ignore space'
+else
+  rm -f "$expected"
+fi
+
+
+# check -noreplacetextplain
+start_test "-noreplacetextplain"
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg replacement of bad text/plain part test
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_876302"
+
+------=_Part_876302
+Content-Type: text/plain; charset="iso-8859-15"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+
+
+------=_Part_876302
+Content-Type: text/html; charset="UTF-8"
+Content-Disposition: inline
+
+<html><head>
+<title>eticket</title>
+</head>
+<body>
+  Yes, the text/plain part really was empty.
+</body>
+</html>
+
+------=_Part_876302--
+EOF
+
+run_prog mhfixmsg last -replacetextplain -noreplacetextplain -outfile "$actual"
+check "$expected" "$actual"
+
+
+# check removal of extraneous trailing semicolon from header parameter list
+start_test "removal of extraneous trailing semicolon from header parameter list"
+cat >"$expected" <<EOF
+To: recipient@example.com
+Subject: test
+From: sender@example.com
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii"
+
+test
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii";
+ name="DATE"
+Content-Description: check folded headers, with and without trailing semicolon
+Content-Disposition: attachment;
+ filename="DATE"
+
+14 April 2014
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+Subject: test
+From: sender@example.com
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii";
+
+test
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="us-ascii";
+ name="DATE"
+Content-Description: check folded headers, with and without trailing semicolon
+Content-Disposition: attachment;
+ filename="DATE";
+
+14 April 2014
+
+------- =_aaaaaaaaaa0--
+EOF
+run_test 'mhfixmsg last -outfile '"$actual" ''
+check "$expected" "$actual"
+
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  # check rmmproc
+  start_test "rmmproc"
+  cat >"$MH_TEST_DIR/Mail/rmmproc" <<'EOF'
+mv "$1" "$1.backup"
+EOF
+  chmod a+x "${MH_TEST_DIR}/Mail/rmmproc"
+  echo "rmmproc: ${MH_TEST_DIR}/Mail/rmmproc" >>"$MH"
+  cp "${MH_TEST_DIR}/Mail/inbox/16" "${MH_TEST_DIR}/Mail/inbox/16.original"
+
+  run_test 'mhfixmsg 16 -textcharset utf-8' ''
+  check "${MH_TEST_DIR}/Mail/inbox/16.backup" \
+        "${MH_TEST_DIR}/Mail/inbox/16.original"
+
+
+  # check -normmproc
+  start_test "-normmproc"
+  cp "${MH_TEST_DIR}/Mail/inbox/21" "${MH_TEST_DIR}/Mail/inbox/22"
+
+  run_test 'mhfixmsg 21 -textcharset utf-8 -normmproc'
+  check "${MH_TEST_DIR}/Mail/inbox/22" \
+        "${MH_TEST_DIR}/Mail/inbox/${sbackup}21" 'keep first'
+fi
+
+
+# check -rmmproc
+start_test "-rmmproc"
+run_test 'mhfixmsg 21 -rmmproc true'
+if test -f '${MH_TEST_DIR}/Mail/inbox/22.backup'; then
+  echo check of mhfixmsg -rmmproc FAILED, should not have created backup file
+  failed=`expr ${failed:-0} + 1`
+fi
+
+
+# check -fixtype
+start_test "-fixtype"
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg with incorrect Content-Type
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; name="plaintext.txt"
+
+this is plain text
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg with incorrect Content-Type
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: application/octet-stream; name="plaintext.txt"
+
+this is plain text
+
+------- =_aaaaaaaaaa0--
+EOF
+
+mhfixmsg -fixtype application/octet-stream last
+check "$expected" "`mhpath last`"
+
+
+# check default -decodetypes
+start_test "default -decodetypes"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 3
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: 7bit
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="iso-8859-1"; name="test2.txt"
+Content-Disposition: attachment; filename="test2.txt"
+Content-Transfer-Encoding: 7bit
+
+<html>
+<head>
+    This was the text/html part.
+</head>
+</body>
+</html>
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 3
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: quoted-printable
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="iso-8859-1"; name="test2.txt"
+Content-Disposition: attachment; filename="test2.txt"
+Content-Transfer-Encoding: base64
+
+PGh0bWw+CjxoZWFkPgogICAgVGhpcyB3YXMgdGhlIHRleHQvaHRtbCBwYXJ0Lgo8L2hlYWQ+Cjwv
+Ym9keT4KPC9odG1sPgo=
+
+------- =_aaaaaaaaaa0--
+EOF
+run_prog mhfixmsg last -outfile "$actual" -noreformat
+check "$expected" "$actual"
+
+
+# check -decodetypes text/plain
+start_test "-decodetypes text/plain"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 4
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: 7bit
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="iso-8859-1"; name="test2.txt"
+Content-Disposition: attachment; filename="test2.txt"
+Content-Transfer-Encoding: base64
+
+PGh0bWw+DQo8aGVhZD4NCiAgICBUaGlzIGlzIHRoZSB0ZXh0L2h0bWwgcGFydC4NCjwvaGVhZD4N
+CjwvYm9keT4NCjwvaHRtbD4NCg==
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 4
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: quoted-printable
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: text/html; charset="iso-8859-1"; name="test2.txt"
+Content-Disposition: attachment; filename="test2.txt"
+Content-Transfer-Encoding: base64
+
+PGh0bWw+DQo8aGVhZD4NCiAgICBUaGlzIGlzIHRoZSB0ZXh0L2h0bWwgcGFydC4NCjwvaGVhZD4N
+CjwvYm9keT4NCjwvaHRtbD4NCg==
+
+------- =_aaaaaaaaaa0--
+EOF
+run_prog mhfixmsg last -outfile "$actual" -decodetypes text/plain -noreformat
+check "$expected" "$actual"
+
+
+# check -decodetypes attachment/ics
+start_test "-decodetypes attachment/ics"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 5
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: 7bit
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: application/ics; charset="iso-8859-1"; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: 7bit
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:test-mhical
+BEGIN:VEVENT
+DTSTAMP:20150101T162400Z
+DTSTART:20150105T160000
+DTEND:20150105T163000
+SUMMARY:4 pm meeting
+END:VEVENT
+END:VCALENDAR
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 5
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: quoted-printable
+
+This is the=
+ text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: application/ics; charset="iso-8859-1"; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0KUFJPRElEOnRlc3QtbWhpY2FsDQpCRUdJTjpW
+RVZFTlQNCkRUU1RBTVA6MjAxNTAxMDFUMTYyNDAwWg0KRFRTVEFSVDoyMDE1MDEwNVQxNjAwMDAN
+CkRURU5EOjIwMTUwMTA1VDE2MzAwMA0KU1VNTUFSWTo0IHBtIG1lZXRpbmcNCkVORDpWRVZFTlQN
+CkVORDpWQ0FMRU5EQVINCg==
+
+------- =_aaaaaaaaaa0--
+EOF
+run_prog mhfixmsg last -outfile "$actual" -noreformat
+check "$expected" "$actual"
+
+
+# check -decodetypes attachment/ics and -nocrlflinebreaks
+start_test "-decodetypes attachment/ics and -nocrlflinebreaks"
+cat >$expected <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 5
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: 7bit
+
+This is the text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: application/ics; charset="iso-8859-1"; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: 7bit
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:test-mhical
+BEGIN:VEVENT
+DTSTAMP:20150101T162400Z
+DTSTART:20150105T160000
+DTEND:20150105T163000
+SUMMARY:4 pm meeting
+END:VEVENT
+END:VCALENDAR
+
+------- =_aaaaaaaaaa0--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg decode test 5
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1"
+Content-Disposition: attachment; filename="test1.txt"
+Content-MD5: kq+Hnc2SD/eKwAnkFBDuEA==
+Content-Transfer-Encoding: quoted-printable
+
+This is the=
+ text/plain part.
+
+------- =_aaaaaaaaaa0
+Content-Type: application/ics; charset="iso-8859-1"; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0KUFJPRElEOnRlc3QtbWhpY2FsDQpCRUdJTjpW
+RVZFTlQNCkRUU1RBTVA6MjAxNTAxMDFUMTYyNDAwWg0KRFRTVEFSVDoyMDE1MDEwNVQxNjAwMDAN
+CkRURU5EOjIwMTUwMTA1VDE2MzAwMA0KU1VNTUFSWTo0IHBtIG1lZXRpbmcNCkVORDpWRVZFTlQN
+CkVORDpWQ0FMRU5EQVINCg==
+
+------- =_aaaaaaaaaa0--
+EOF
+run_prog mhfixmsg last -outfile "$actual" -nocrlflinebreaks -noreformat
+check "$expected" "$actual"
+
+
+# check that input is passed through to output when there's a parse error
+# (the charset string is missing its closing quote) with -outfile
+start_test "input is passed through to output when there's a parse error"
+cat >"$expected.err" <<EOF
+mhfixmsg: invalid quoted-string in message 31's Content-Type: field
+    (parameter charset)
+mhfixmsg: unable to parse message 31
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Subject: mhfixmsg pass through on parse error
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----- =_aaaaaaaaaa0"
+
+------- =_aaaaaaaaaa0
+Content-Type: text/plain; charset="iso-8859-1
+Content-Disposition: attachment; filename="test1.txt"
+Content-Transfer-Encoding: quoted-printable
+
+This is the=
+ text/plain part.
+
+------- =_aaaaaaaaaa0--
+EOF
+set +e
+run_prog mhfixmsg last -outfile "$actual" 2>"$actual.err"
+set -e
+#### Expected output is identical to the input message.
+check "`mhpath last`" "$actual" 'keep first'
+check "$expected.err" "$actual.err"
+
+
+# check that stdin is passed through to output when there's a parse error
+# (the charset string is missing its closing quote) with -outfile, and
+# input from stdin.  Don't check err output, because it contains the name
+# of a tmp file.  It's similar to that of the previous check.
+start_test "stdin is passed through to output when there's a parse error"
+set +e
+run_prog mhfixmsg -file - -outfile - <`mhpath last` >"$actual" 2>/dev/null
+set -e
+#### Expected output is identical to the input message.
+check "`mhpath last`" "$actual" 'keep first'
+
+
+start_test "pass through message with relative folder path with parse error"
+#### Factor out leading portion of current folder path and make it relative.
+pwd=`pwd -P`
+set +e
+run_prog mhfixmsg +./`mhpath | sed "s%^$pwd/%%"` last -out - >"$actual" 2>/dev/null
+set -e
+folder -f +inbox >/dev/null
+#### Expected output is identical to the input message.
+check "`mhpath last`" "$actual"
+
+
+start_test "fix RFC 2047 encoded header parameters"
+#### Also, add C-T-E:8bit to the message headers.
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Date: Wed, 28 Sep 2016 11:24:28 -0400
+Subject: invalid header parameter encoding
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=001a114dd3e8fe9c56053d92f414
+Content-Transfer-Encoding: 8bit
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8
+
+This is a test.
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset="UTF-8"; name*=UTF-8''test%C3%B8.txt
+Content-Disposition: attachment; filename*=UTF-8''test%C3%B8.txt
+Content-Transfer-Encoding: 8bit
+
+This is the first text/plain part, in a subpart.  The file name
+is testø.txt.
+
+--001a114dd3e8fe9c56053d92f414--
+EOF
+
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Date: Wed, 28 Sep 2016 11:24:28 -0400
+Subject: invalid header parameter encoding
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=001a114dd3e8fe9c56053d92f414
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8
+
+This is a test.
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8; name="=?UTF-8?B?dGVzdMO4LnR4dA==?="
+Content-Disposition: attachment; filename="=?UTF-8?B?dGVzdMO4LnR4dA==?="
+Content-Transfer-Encoding: 8bit
+
+This is the first text/plain part, in a subpart.  The file name
+is testø.txt.
+
+--001a114dd3e8fe9c56053d92f414--
+EOF
+run_prog mhfixmsg -file - -outfile - <`mhpath last` >"$actual" 2>/dev/null
+check "$expected" "$actual"
+
+
+start_test "-nodecodeheaderfieldbodies"
+cat >"`mhpath new`" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Date: Wed, 28 Sep 2016 11:24:28 -0400
+Subject: =?utf-8?B?dGhpcyBTdWJqZWN0IHdhcyBVVEYtOCBlbmNvZGVk?=
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=001a114dd3e8fe9c56053d92f414
+Content-Transfer-Encoding: 8bit
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8
+
+This is a test.
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8; name="test.txt"
+Content-Disposition: attachment; filename="test.txt"
+Content-Transfer-Encoding: 8bit
+
+This is the first text/plain part, in a subpart.  The file name
+is test.txt.
+
+--001a114dd3e8fe9c56053d92f414--
+EOF
+run_prog mhfixmsg -file - -outfile - -decodeheaderfieldbodies utf-8 \
+     -nodecodeheaderfieldbodies <`mhpath last` >"$actual" 2>/dev/null
+check `mhpath last` "$actual" 'keep first'
+
+
+start_test "decode UTF-8 header value"
+cat >"$expected" <<EOF
+To: recipient@example.com
+From: sender@example.com
+Date: Wed, 28 Sep 2016 11:24:28 -0400
+Subject: this Subject was UTF-8 encoded
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=001a114dd3e8fe9c56053d92f414
+Content-Transfer-Encoding: 8bit
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8
+
+This is a test.
+
+--001a114dd3e8fe9c56053d92f414
+Content-Type: text/plain; charset=UTF-8; name="test.txt"
+Content-Disposition: attachment; filename="test.txt"
+Content-Transfer-Encoding: 8bit
+
+This is the first text/plain part, in a subpart.  The file name
+is test.txt.
+
+--001a114dd3e8fe9c56053d92f414--
+EOF
+
+run_prog mhfixmsg -file - -outfile - -decodeheaderfieldbodies utf-8 \
+     <`mhpath last` >"$actual" 2>&1
+check "$expected" "$actual"
+
+
+start_test "decode ASCII header value"
+cat >"$expected" <<EOF
+Subject: Here's a /Subject/ that's split across two encoded strings
+EOF
+cat >"`mhpath new`" <<EOF
+Subject: =?ascii?Q?Here's=20a=20=2FSubject=2F=20that's=20?=
+ =?ascii?Q?split=20across=20two=20encoded=20strings?=
+EOF
+run_prog mhfixmsg -file `mhpath last` -outfile "$actual" \
+         -decodeheaderfieldbodies utf-8
+check "$expected" "$actual"
+
+
+start_test "decode mixed undecoded and decoded header values"
+cat >"$expected" <<EOF
+Subject: Here's a /Subject/ that mixes undecoded and decoded strings
+X: This one also mixes undecoded  and decoded strings
+EOF
+cat >"`mhpath new`" <<EOF
+Subject: Here's a /Subject/ that
+ =?ascii?Q?mixes=20undecoded=20and=20decoded=20strings?=
+X: This one
+ =?UTF-8?Q?also=20mix?=
+ =?ascii?Q?es=20undecoded?=  and
+ =?ISO8859-1?Q?decoded?= strings
+EOF
+run_prog mhfixmsg -file `mhpath last` -outfile "$actual" \
+         -decodeheaderfieldbodies utf-8
+check "$expected" "$actual"
+
+
+start_test "attempt to decode with embedded NUL"
+#### It would be better to expect unchanged input, but decode_rfc2047()
+#### suppresses NULs instead of decoding them.
+cat >"$expected" <<EOF
+Subject: Here's a null: 
+EOF
+cat >"`mhpath new`" <<EOF
+Subject: =?us?Q?Here=27s=20a=20null=3A=20=00?=
+EOF
+run_prog mhfixmsg -file `mhpath last` -outfile "$actual" \
+         -decodeheaderfieldbodies utf-8
+#### First check against input to see if there was no change.  Only
+#### check against $expected if the input was decoded.
+if cmp `mhpath last` "$expected" >/dev/null; then
+  check "$expected" "$actual"
+fi
+
+
+start_test "decode to specified destination charset"
+cat >"$expected" <<EOF
+Subject: Re: Fwd: r?pertoire des ensembles musicaux
+EOF
+cat >"`mhpath new`" <<EOF
+Subject: Re:
+ =?utf-8?q?Fwd=3A_r=C3=A9pertoire_des_ensembles_musicau?=
+ =?utf-8?q?x?=
+EOF
+run_prog mhfixmsg -file `mhpath last` -outfile "$actual" -decodeh ascii
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with base64 code that ends with == plus footer"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with ==
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQuCg==
+
+--
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with ==
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is some text.
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart--
+EOF
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with -nodecodetext"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with ==
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQuCg==
+
+--
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with ==
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQuCg==
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart--
+EOF
+run_prog mhfixmsg -nodecodetext last -outfile "$actual"
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with base64 code that ends with = plus footer"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with =
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBwbGFpbiB0ZXh0Lgo=
+
+--
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends with =
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is plain text.
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart--
+EOF
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with base64 code that ends without = plus footer"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends without =
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQK
+
+--
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends without =
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is some text
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart--
+EOF
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with base64 code that contains single invalid character"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends without =
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQK
+
+-X-
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: base64 code that ends without =
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQK
+
+-X-
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected_err" <<EOF
+mhfixmsg: invalid base64 byte 0x2d: -X-
+Wait, this shouldn't be here.
+
+EOF
+
+run_prog mhfixmsg last -outfile "$actual" 2>"$actual_err" || true
+check "$expected" "$actual"
+check "$expected_err" "$actual_err"
+
+
+start_test "-checkbase64 with base64 code in MIME part"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: MIME part with base64 encoded text and unencoded footer
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBzb21lIHRleHQK
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is a second text/plain part.
+
+------=_nmh-multipart--
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: MIME part with base64 encoded text and unencoded footer
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+
+------=_nmh-multipart
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart1"
+
+------=_nmh-multipart1
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is some text
+
+------=_nmh-multipart1
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart1--
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+This is a second text/plain part.
+
+------=_nmh-multipart--
+EOF
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+start_test "-checkbase64 with 8-bit encoded base64 code"
+cat >"`mhpath new`" <<EOF
+From: Test <test@example.com>
+Subject: 8-bit encoded base64 code
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+U2VlIFJGQyAyMDQ1IMKnNi44Lg==
+
+--
+Wait, this shouldn't be here.
+EOF
+
+cat >"$expected" <<EOF
+From: Test <test@example.com>
+Subject: 8-bit encoded base64 code
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_nmh-multipart"
+Content-Transfer-Encoding: 8bit
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 8bit
+
+See RFC 2045 §6.8.
+
+------=_nmh-multipart
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+--
+Wait, this shouldn't be here.
+
+------=_nmh-multipart--
+EOF
+
+run_prog mhfixmsg last -outfile "$actual"
+check "$expected" "$actual"
+
+
+if [ $can_reformat_texthtml -eq 1 ]; then
+  start_test "use correct encoding for new text/plain part"
+  cat >"`mhpath new`" <<EOF
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="mime-boundary"
+Content-Transfer-Encoding: 8bit
+
+--mime-boundary
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=iso-8859-1
+
+&nu;&mu;&chi;
+
+--mime-boundary--
+EOF
+
+  cat >"$expected" <<EOF
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="mime-boundary"
+Content-Transfer-Encoding: 8bit
+
+--mime-boundary
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+νμχ
+
+--mime-boundary
+Content-Transfer-Encoding: 7bit
+Content-Type: text/html; charset=iso-8859-1
+
+&nu;&mu;&chi;
+
+--mime-boundary--
+EOF
+
+  run_prog mhfixmsg last -textcharset utf-8 -outfile "$actual"
+  check "$expected" "$actual"
+fi
+
+
+start_test "change text/plain charset"
+cat >"`mhpath new`" <<EOF
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="mime-boundary"
+Content-Transfer-Encoding: 8bit
+
+--mime-boundary
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=iso-8859-1
+
+=E9
+
+--mime-boundary
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=iso-8859-1
+
+&#233;
+
+--mime-boundary--
+EOF
+
+cat >"$expected" <<EOF
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="mime-boundary"
+Content-Transfer-Encoding: 8bit
+
+--mime-boundary
+Content-Transfer-Encoding: 8bit
+Content-Type: text/plain; charset="utf-8"
+
+é
+
+--mime-boundary
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=iso-8859-1
+
+&#233;
+
+--mime-boundary--
+EOF
+
+run_prog mhfixmsg last -decodetypes text/plain -textcharset utf-8 -outfile "$actual"
+check "$expected" "$actual"
+
+
+# make sure there are no tmp files left over
+find "$MH_TEST_DIR/Mail" -name '*mhfix*' -print \
+  >"$actual"
+cat >"$expected" <<EOF
+EOF
+
+check "$expected" "$actual"
+
+
+finish_test
+exit $failed

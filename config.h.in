@@ -1,0 +1,190 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* The prefix that is prepended to the name of message files when they are
+   "removed" by rmm. This should typically be `,' or `#'. */
+#undef BACKUP_PREFIX
+
+/* Define to use the Cyrus SASL library for authentication of POP and SMTP. */
+#undef CYRUS_SASL
+
+/* The default lock type for the mail spool file */
+#undef DEFAULT_LOCKING
+
+/* Define to 1 if `TIOCGWINSZ' requires <sys/ioctl.h>. */
+#undef GWINSZ_IN_SYS_IOCTL
+
+/* Define to 1 if you have the `arc4random' function. */
+#undef HAVE_ARC4RANDOM
+
+/* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
+   */
+#undef HAVE_DIRENT_H
+
+/* Define to 1 if you have the <fcntl.h> header file. */
+#undef HAVE_FCNTL_H
+
+/* Define to 1 if you have the `flock' function. */
+#undef HAVE_FLOCK
+
+/* Define to 1 if you have the `getline' function. */
+#undef HAVE_GETLINE
+
+/* Define to 1 if you have the `getutxent' function. */
+#undef HAVE_GETUTXENT
+
+/* Define if you have the iconv() function. */
+#undef HAVE_ICONV
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `lockfile' library (-llockfile). */
+#undef HAVE_LIBLOCKFILE
+
+/* Define to 1 if you have the `lockf' function. */
+#undef HAVE_LOCKF
+
+/* Define to 1 if you have the `mbtowc' function. */
+#undef HAVE_MBTOWC
+
+/* Define to 1 if you have the `mkstemps' function. */
+#undef HAVE_MKSTEMPS
+
+/* Define to 1 if you have the <ndir.h> header file, and it defines `DIR'. */
+#undef HAVE_NDIR_H
+
+/* Define to 1 if you have the <stdbool.h> header file. */
+#undef HAVE_STDBOOL_H
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if `d_type' is a member of `struct dirent'. */
+#undef HAVE_STRUCT_DIRENT_D_TYPE
+
+/* Define to 1 if `tm_gmtoff' is a member of `struct tm'. */
+#undef HAVE_STRUCT_TM_TM_GMTOFF
+
+/* Define to 1 if you have the <sys/dir.h> header file, and it defines `DIR'.
+   */
+#undef HAVE_SYS_DIR_H
+
+/* Define to 1 if you have the <sys/ndir.h> header file, and it defines `DIR'.
+   */
+#undef HAVE_SYS_NDIR_H
+
+/* Define to 1 if you have the <sys/param.h> header file. */
+#undef HAVE_SYS_PARAM_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/stream.h> header file. */
+#undef HAVE_SYS_STREAM_H
+
+/* Define to 1 if you have the <sys/time.h> header file. */
+#undef HAVE_SYS_TIME_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if you have the <wchar.h> header file. */
+#undef HAVE_WCHAR_H
+
+/* Define to 1 if you have the <wctype.h> header file. */
+#undef HAVE_WCTYPE_H
+
+/* Define to 1 if you have the `wcwidth' function. */
+#undef HAVE_WCWIDTH
+
+/* Define to 1 if you have the `X509_VERIFY_PARAM_set1_host' function. */
+#undef HAVE_X509_VERIFY_PARAM_SET1_HOST
+
+/* Define as const if the declaration of iconv() needs const. */
+#undef ICONV_CONST
+
+/* Directory to store dot-locking lock files */
+#undef LOCKDIR
+
+/* Define to 1 if you need to make `inc' set-group-id because your mail spool
+   is not world writable. There are no guarantees as to the safety of doing
+   this, but this #define will add some extra security checks. */
+#undef MAILGROUP
+
+/* Program, with arguments, to provide MIME encoding. */
+#undef MIMEENCODINGPROC
+
+/* Program, with arguments, to provide MIME type. */
+#undef MIMETYPEPROC
+
+/* Define to enable support for multibyte character sets. */
+#undef MULTIBYTE_SUPPORT
+
+/* Define to the header containing the ndbm API prototypes. */
+#undef NDBM_HEADER
+
+/* Define to 1 if assertions should be disabled. */
+#undef NDEBUG
+
+/* Support OAuth2 in SMTP auth. */
+#undef OAUTH_SUPPORT
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Support for using readline() in whatnow */
+#undef READLINE_SUPPORT
+
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
+#undef STDC_HEADERS
+
+/* Support TLS for session encryption. */
+#undef TLS_SUPPORT
+
+/* The type of the argument of the tputs() callback */
+#undef TPUTS_PUTC_ARG
+
+/* Version number of package */
+#undef VERSION
+
+/* Define to 1 if `struct winsize' requires <sys/ptem.h>. */
+#undef WINSIZE_IN_PTEM
+
+/* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
+   `char[]'. */
+#undef YYTEXT_POINTER

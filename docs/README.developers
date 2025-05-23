@@ -1,0 +1,355 @@
+# README.developers
+#
+
+This file is intended to provide a few tips for anyone doing development on nmh.
+Developers who learn things "the hard way" about the nmh codebase (as opposed to
+local info best encoded in a comment) are encouraged to share their wisdom here.
+
+--------------------
+quick build and test
+--------------------
+Any of the following shell command sequences will download the latest nmh
+sources to the nmh subdirectory, build, and test.  See MACHINES for build
+prerequisites.
+
+git clone git://git.savannah.nongnu.org/nmh.git &&
+cd nmh &&
+./autogen.sh &&
+./configure &&
+make check
+
+curl https://git.savannah.gnu.org/cgit/nmh.git/plain/build_nmh | sh
+
+wget -O - https://git.savannah.gnu.org/cgit/nmh.git/plain/build_nmh | sh
+
+lynx -dump https://git.savannah.gnu.org/cgit/nmh.git/plain/build_nmh | sh
+
+
+----------------
+commit checklist
+----------------
+
+- Code updated?
+- Test added?
+- make distcheck passed?
+- man page and other documentation updated?
+- docs/pending-release-notes updated?
+- Should commit message reference bug report?
+- Be sure that commit message starts with one-line synopsis, then a
+  blank line.
+- Update/close bug report (with commit id)?
+- Notify nmh-workers?
+
+
+---------------------------------
+C library/system call usage notes
+---------------------------------
+
+* Use m_mktemp2() or m_mktemp() instead of mkstemp(3) (see section on
+  nmh temporary files below).
+* Use m_unlink() instead of unlink(3).
+* Use done() instead of _exit(3) except after a fork(3).
+* Don't cause the process's exit status to be outside of [0, 125] as
+  a shell's ‘$?’ may use higher values for its own errors or indicating
+  a signal occurred.  In particular, be wary of incrementing a counter
+  on each error and exiting with that as the status.
+
+
+-------------------------
+autoconf & automake files
+-------------------------
+
+If you wish to change the `configure' script, the generated Makefile
+or other related files, you'll need to first install GNU m4, available
+from <ftp://ftp.gnu.org/pub/gnu/m4/>, then GNU autoconf
+(<ftp://ftp.gnu.org/pub/gnu/autoconf/>) and GNU automake
+(<ftp://ftp.gnu.org/pub/gnu/automake/>).  Nmh is currently using a
+minimum of autoconf 2.68 and automake 1.12.
+
+Most of the configure-related files are automatically generated.
+The only files you should need to manually edit are configure.ac
+and any autoconf macros in the m4 directory.  Don't, for instance,
+edit config.h.in.  Though it is an input file from the point of
+view of the users (and the configure script) it is an output file
+from the point of view of the developers (and the autoconf script).
+
+If you wish to add a new autoconf macro, it should be placed in it's
+own file and put in the m4 directory; aclocal will automatically pick
+it up and automake will add it to the distribution target automatically.
+
+If you wish to make changes to the Makefile, you will need to edit
+Makefile.am.  See the automake documentation if you need further help.
+You should always check changes to Makefile.am by using "make distcheck".
+
+Note that the automatically generated autotools files (such as config.h.in,
+Makefile.in, and configure), are NOT kept in git.  Thus, when you check out
+a git tree, you need to run the autogen.sh script before you can build
+anything:
+
+        % ./autogen.sh
+
+
+-------------------
+directory structure
+-------------------
+
+Following is a list of nmh's directories along with a brief description of the
+purpose of each one.  Meanings are given for the abbreviations, but note that
+these meanings are just informed guesses as to what the MH developers were
+thinking.
+
+./
+    The top-level directory.  Contains files like README and INSTALL.
+
+config/
+    Contains utility files for the `configure' process.  Ordinarily nothing in
+    here needs to be messed with.
+
+docs/
+    Contains more specialized documentation, such as this file and
+    the FAQ.
+
+etc/
+    Contains files, file templates, and scripts to generate files that will be
+    installed in the ${prefix}/etc directory.  Stuff like replcomps.
+
+h/
+    Most of nmh's header (.h) files are kept not in the individual source
+    directories, but in this central location.
+
+man/
+    Contains all the input files that are processed to generate nmh's manual
+    pages.
+
+mts/
+    "mts" stands for "Message Transfer Service".  Source files specific to the
+    different MTSs go in the subdirectories.
+
+mts/smtp/
+    When nmh is configured to just talk to an SMTP server over TCP/IP, the
+    source in this directory is compiled.
+
+sbr/
+    "sbr" stands for "subroutine(s)".  For the most part, each source file in
+    this directory contains a single function with the same name as the source
+    file.  These functions are of general use and are called from throughout
+    nmh.
+
+SPECS/
+    Contains files such as RPM specs.
+
+test/
+    The num unit test suite.
+
+tools/
+    "tools" contains tools, scripts, and supporting files used by the
+    developers while writing, debugging, and testing the code.
+
+uip/
+    "uip" stands for "User Interface Programs".  Most nmh commands have a file
+    in this directory named <command>.c containing the code for that command
+    (e.g. repl.c).  In some cases there is also an auxiliary file called
+    <command>sbr.c which contains additional subroutines called from <command>.c
+    (which would contain not much else besides main()).
+
+
+---
+git
+---
+
+As of December 2010, nmh has switched to using git for revision control
+instead of CVS.  While the topic of git is beyond the scope of this FAQ,
+to get started with git & nmh, you can run the following command to checkout
+the nmh repository (with read-only access to it):
+
+    % git clone git://git.savannah.nongnu.org/nmh.git
+
+That will create a workspace called nmh.  To update that workspace
+with changes to the master, cd to it and run:
+
+    % git pull
+
+If you are a project member and want write access to the repository,
+you'll have to checkout with the following command instead of the one
+above:
+
+    % git clone <username>@git.sv.nongnu.org:/srv/git/nmh.git
+
+We suggest using git pull --rebase instead of the default merge for
+git pull.  If you don't want to add the --rebase option every time,
+you can tell git pull to always rebase in your nmh workspace by
+cd'ing to it and running the following command:
+
+    % git config --bool branch.master.rebase true
+
+And you'll probably want the following, also, so that --rebase applies
+to any new branches that you create:
+
+    % git config branch.autosetuprebase always
+
+
+-------------------------------------------------------
+nmh-local functions to use in preference to OS versions
+-------------------------------------------------------
+
+For some system functions whose availability or behavior varies from OS to OS,
+nmh conditionally uses a local definition with the same name as the OS function
+(e.g. snprintf()).  For other functions, developers need to avoid the OS
+versions and always use the nmh-supplied function.  Here is a list of such
+functions:
+
+OS function  nmh-local version to use instead
+===========  ================================
+getpass()    nmh_getpass()
+
+
+-------------------
+nmh temporary files
+-------------------
+
+To create a temporary file, use m_mktemp2() or m_mktemp().  They use
+mkstemp(3), but they also register the temporary file for removal on
+program termination.  So, do not use mkstemp() directly.
+
+To further support this, nmh_init() must be called at the beginning of
+main().  And, if a child process is not going to immediately call one
+of the exec(3) functions or _exit(3) after a fork(3), it should call
+unregister_for_removal(0).  Finally, nmh_init() sets up signal handlers
+for several signals:  these signal handlers should not be disabled.
+
+
+--------------
+nmh test suite
+--------------
+
+The nmh test suite is run through the Makefile, with "make check"
+or "make distcheck".
+
+In the nmh test suite, nmh programs to be tested should be invoked
+through the run_test or run_prog shell functions defined in
+test/common.sh.
+
+Instead of echoing test progress, use start_test()/finish_test()
+from tests/common.sh.  These will report the particular test name,
+within the test, only if there is a failure.
+
+To enable the use of valgrind, where available, set the environment
+variable NMH_VALGRIND to a non-null value.  However, a separate
+environment variable, VALGRIND_ME, triggers the use of valgrind in
+test/inc/test-eom-align because it greatly extends the duration of
+that test.
+
+If valgrind complains about "serious error when reading debuginfo"
+from a library, either update or remove the debuginfo package for
+the offending library.
+
+
+-------------
+releasing nmh
+-------------
+
+To make a public release of nmh (we'll use version 1.5 as the example
+here; the convention for release candidates is to use something like
+"1.5-RC1"):
+
+ 1. Create a release branch.  The convention is to name release branches
+    with the name "<version>-release".
+
+    % git branch 1.5-release
+
+    Note you are still on the master branch at this point.  Mark the
+    current revision as the branchpoint for the new release branch:
+
+    % git tag -a -m "This tag marks the point where we started the branch for 1.5" 1.5-branchpoint
+
+    Now mark the master branch with a post-release version number (the
+    convention here is to use VERSION+dev as the version number).
+
+    % echo 1.5+dev > VERSION
+    % git commit VERSION
+    % git push
+    % git push --tags
+
+    Then do:
+
+    % git checkout 1.5-release
+
+    You are now on the 1.5 release branch.
+
+ 2. % echo 1.5 > VERSION
+    % date +"%e %B %Y" > DATE
+    (DATE should contain something like "30 December 2000")
+
+ 3. % git commit VERSION DATE; git push
+
+ 4. % git tag -a 1.5 -m 'Releasing nmh-1.5.'
+    % git push --tags
+
+    Note that the new convention for tagging is to simply tag with the
+    version number (tag formats in the past have varied).
+
+ 5. % make distcheck
+
+    If you want to check the distribution build with some particular
+    configure options, set the DISTCHECK_CONFIGURE_FLAGS variable.
+    E.g.:
+
+    % make distcheck DISTCHECK_CONFIGURE_FLAGS=--with-cyrus-sasl
+
+ 6. Upload the distribution file to savannah.  You can automate this process
+    by doing:
+
+    % make upload SAVANNAH_USERNAME=username
+
+    This will automatically call gpg to sign the release.  You can bypass
+    this step by setting the SKIP_GPG_SIG variable.
+
+ 7. Update the http://www.nongnu.org/nmh/ homepage. (It lives in the CVS
+    'webpages repository'; see https://savannah.nongnu.org/cvs/?group=nmh)
+
+ 8. Add a news item to the savannah nmh page. You'll have to submit it first
+    and then separately approve it (under News->Manage).
+
+ 9. Send the release announcement email to the following places:
+     nmh-workers@nongnu.org
+     nmh-announce@nongnu.org
+     exmh-users@redhat.com
+     exmh-workers@redhat.com
+     mh-e-users@lists.sourceforge.net
+
+    If the release fixes significant security holes, also send an announcement
+    to bugtraq@securityfocus.com.  The exmh lists require you to be subscribed
+    in order to post.  Note that you don't need to post separately to
+    comp.mail.mh, as the mh-users mailing list is apparently bidirectionally
+    gatewayed to it.
+
+    Preferably, the announcement should contain the MD5 hash generated above,
+    and should be PGP-signed.  It should include the URL for the tarball as
+    well as the URL of the website.  It should contain a brief summary of
+    visible changes, as well as the URL of the git diff page that would show
+    a detailed list of changes.  The changes between 1.5 and 1.4 would be
+    shown by [this is just a guess, I don't know anything about cgit, and
+    it assumes that we tag with nmh-x_x-release from now on]:
+
+        http://git.savannah.gnu.org/cgit/nmh.git/diff/?h=nmh-1_5-release?h=nmh-1_4-release
+
+
+---------------
+after a release
+---------------
+
+Keep an eye on Debian's packaging, especially what patches they have to
+apply, and the results of their Lintian checker, which even includes
+spelling errors in man pages and binaries.
+
+    https://sources.debian.net/src/nmh/1.6-16/debian/patches/
+    https://lintian.debian.org/full/az@debian.org.html#nmh
+
+Perhaps some nmh developer that uses Debian, or Ubuntu?, could provide
+package-building commands, including lintian(1), for Makefile.am so
+Lintian's complaints are known before release.
+
+A useful overview of what third parties are shipping which release is
+available at https://repology.org/project/nmh/versions with a quick
+overview on the Badges tab which shows
+https://repology.org/badge/vertical-allrepos/nmh.svg.

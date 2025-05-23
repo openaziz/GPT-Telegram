@@ -1,0 +1,87 @@
+nmh unit test suite.
+
+The purpose of these tests is to verify the functionality of the nmh
+commands.  The goal of the suite is to create an environment where testing
+nmh commands is easy and useful.  Each test is a shell script, and is
+launched via the 'sh' command. The script should run the test and report
+the result by one of:
+
+  * for a test pass: exit with status 0
+  * where a test has been skipped (perhaps because it depends on an
+    external program which can't be found): print "Test $0 SKIP (reason)"
+    and exit with status 77
+  * for a test fail: exit with some status other than 0 or 120
+
+The Suite is a re-worked version of the original test suite; it now is
+designed to work with Automake.  To run these tests you can do "make check"
+via the top-level Makefile.  This is also done automatically via
+"make distcheck".
+
+WARNING:  The test suite installs nmh and runs the tests on that test
+installation.  If you run tests individually, they will not remove
+that test installation or check to see if it remains up to date with
+your nmh workspace.  You can run test/clean after a test to remove the
+test installation.  "make check" will do that, so it is best to use
+it.
+
+If you wish to write a new test script, here are the steps:
+
+- Make sure your test script sources $MH_OBJ_DIR/test/common.sh and
+  calls the setup_test shell function (the other scripts have examples
+  of this).
+
+- Your path will be set up to find the locations of the test nmh binaries.
+
+- Add your script to the TESTS variable in the toplevel Makefile.am.
+  By convention, test script names start with "test-", though that
+  is not a requirement.
+
+- If you need additional files for your tests, be sure to add them to
+  the EXTRA_DIST variable in Makefile.am.  Note that you should insure
+  that you access these files relative to the $srcdir environment variable.
+
+- Verify that the test works with both "make check" and "make distcheck".
+
+Please use only Bourne shell and bare-bones POSIX program constructs
+in the test scripts.  In particular:
+
+- Use `` instead of $().
+
+- Wrap shell variables with "" if they could possibly contain
+  whitespace or special characters that would affect syntax.
+
+- Use the arith_eval() function in common.sh instead of $(()) or expr.
+  It detects at run time if $(()) is available.
+
+- Use grep >/dev/null instead of grep -q.
+
+- Don't use egrep, grep -E, fgrep, grep -F, or other non-portable grep
+  functionality.  The built-in case statement supports alternation (|).
+
+- Don't use ! to negate conditions.  Instead, use something like:
+    <condition> || <statement>
+  or
+    if <condition>; then :; else <statements> fi
+
+- Separate variable assignment from export (don't assign in export
+  statements).
+
+- Use sed >tmpfile and mv instead of sed -i.
+
+- Avoid depending on the exact format of output from system (non-nmh)
+  programs.
+
+- Use octal instead of hex (\x) bytes in printf(1) formats, because hex
+  is not supported by POSIX printf.
+
+The Heirloom Bourne Shell, http://heirloom.sourceforge.net/sh.html,
+catches many non-portable shell constructs, such as $(), $(()), !, and
+assignment in export statements.
+
+checkbashisms, available at http://sourceforge.net/projects/checkbaskisms/,
+might help some catch problems.  Though it misses all of the troublesome
+constructs, except for assignment in an export statement, listed above.
+
+The "Portable Shell" section of the Autoconf info manual has a wealth
+of tips for avoiding portability problems in shell scripts.  It might
+be available by entering:  info autoconf portable.

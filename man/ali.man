@@ -1,0 +1,94 @@
+.TH ALI %manext1% 2013-12-05 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+ali \- list nmh mail aliases
+.SH SYNOPSIS
+.HP 5
+.na
+.B ali
+.RB [ \-help ]
+.RB [ \-version ]
+.RB [ \-alias
+.IR aliasfile ]
+.RB [ \-list " | " \-nolist ]
+.RB [ \-user " | " \-nouser ]
+.RI [ aliases " ...]"
+.ad
+.SH DESCRIPTION
+.B ali
+searches the named mail alias files for each of the given
+.IR aliases .
+It creates a list of addresses for those
+.IR aliases ,
+and writes that list on standard output.  If no arguments are given,
+.B ali
+outputs all alias entries.
+.PP
+By default, when an alias expands to multiple addresses, the addresses
+are separated by commas and printed on as few lines as possible.  If the
+.B \-list
+switch is specified, and an address expands to multiple
+addresses, each address will appear on a separate line.
+.PP
+The
+.B \-user
+switch directs
+.B ali
+to perform its processing in
+an inverted fashion: instead of listing the addresses that each given
+alias expands to,
+.B ali
+will list the aliases that expand to each
+given address.
+.PP
+The files specified by the profile entry
+.RI \*(lq Aliasfile \*(rq
+and any additional alias files given by the
+.B \-alias
+.I aliasfile
+switch will be read.  Each
+.I alias
+is processed as described in
+.IR mh\-alias (5).
+.SH FILES
+Alias files are looked up in multiple locations: if the pathname is
+absolute or starts with
+.RI \*(lq . \*(rq
+or
+.RI \*(lq .. \*(rq
+it is accessed directly; otherwise tilde expansion is done on
+usernames, then files are searched for in the user's
+.I Mail
+directory as specified in their profile.  If not found there, the directory
+.RI \*(lq %nmhetcdir% \*(rq
+is checked.
+.PP
+.TP 20
+$HOME/.mh_profile
+The user's profile.
+.SH "PROFILE COMPONENTS"
+.PP
+.PD 0
+.TP 20
+Path:
+To determine the user's nmh directory
+.TP
+Aliasfile:
+For a default alias file
+.PD
+.SH "SEE ALSO"
+.IR mh\-alias (5)
+.SH DEFAULTS
+.PD 0
+.TP "\w'aliasfile  'u
+aliasfile
+%nmhetcdir%/MailAliases
+.TP
+\-nolist
+.TP
+\-nouser
+.PD
+.SH CONTEXT
+None

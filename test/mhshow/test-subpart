@@ -1,0 +1,212 @@
+#!/bin/sh
+######################################################
+#
+# Test show of one part, fixed by
+# 31cba404636730df219dd009ca5893ccc56d46af
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+mhn_defaults="$MH_INST_DIR${nmhetcdir}/mhn.defaults"
+
+if grep mhfixmsg-format-text/html "${mhn_defaults}" >/dev/null; then
+  can_reformat_texthtml=1
+  if grep 'mhfixmsg-format-text/html.*w3m' "${mhn_defaults}" \
+    >/dev/null; then
+    #### w3m uses $HOME/.w3m/, and creates it if it doesn't exist.  To
+    #### support testing with non-writeable $HOME, and to not leave
+    #### relics from this test if it is writeable but doesn't already
+    #### have a .w3m, and to not depend on whatever is in that if it
+    #### does already exist, overwrite $HOME if using w3m.
+    HOME="$MHTMPDIR"; export HOME
+  fi
+else
+  echo "$0: skipping html checks because no text browser was found"
+  can_reformat_texthtml=0
+fi
+
+# Write message with a text/plain subpart.
+msgfile=`mhpath new`
+msgnum=`basename $msgfile`
+cat > $msgfile <<EOF
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="NextPart_001"
+Content-class: urn:content-classes:message
+Date: Thu, 19 May 2011 00:00:00 -0000
+From: sender@example.com
+To: recipient@example.com
+
+This is a multi-part message in MIME format.
+
+--NextPart_001
+Content-Type: multipart/related;
+    type="multipart/alternative";
+    boundary="NextPart_002"
+
+--NextPart_002
+Content-Type: text/plain;
+    charset="utf-8"
+
+This is the text/plain part.
+
+--NextPart_002--
+
+--NextPart_001--
+EOF
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.1 - text/plain -   29B  ]
+This is the text/plain part.
+EOF
+
+# check it
+start_test 'text/plain part'
+run_prog mhshow -part 1.1 -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : part 1.1
+
+
+# tests of -part/-type/-prefer
+
+cat > $msgfile <<EOF
+To: example@example.org
+From: someone <someone@example.com>
+Subject: mhshow -part/-type/-prefer test
+Date: Thu, 29 Jan 2015 18:12:21 +0000 (GMT)
+Content-Type: multipart/mixed; boundary="BoundaryMixed"
+
+--BoundaryMixed
+Content-type: multipart/alternative;
+ boundary="BoundaryAlternative1"
+
+--BoundaryAlternative1
+Content-type: text/plain; charset=US-ASCII; format=flowed
+Content-transfer-encoding: 8bit
+
+This is the body text/plain part.
+--BoundaryAlternative1
+Content-type: multipart/related;
+ boundary="BoundaryAlternative2"; type="text/html"
+
+--BoundaryAlternative2
+Content-type: text/html; CHARSET=US-ASCII
+Content-transfer-encoding: quoted-printable
+
+<html><body><div><span style=3D"line-height: 1.5;">
+This is the text/html body part.
+</span></div></body></html>
+
+--BoundaryAlternative2--
+
+--BoundaryAlternative1--
+
+--BoundaryMixed
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+This is the final text/plain signature part.
+
+--BoundaryMixed--
+EOF
+
+# Write the expected output.
+if [ $can_reformat_texthtml -eq 1 ]; then
+  cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.1.1 - text/html -   111B  ]
+This is the text/html body part.
+EOF
+
+  # check it
+  start_test 'text/html part'
+  run_prog mhshow -part 1.1.1 -form mhl.null $msgnum 2>&1 |
+      squeeze_whitespace >$actual
+  check "$expected" "$actual" : part 1.1.1
+fi
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.2 - text/plain -   33B  ]
+This is the body text/plain part.
+EOF
+
+# check it
+start_test 'text/plain alternative part'
+run_prog mhshow -part 1.2 -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : part 1.2
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.1 - text/plain -   33B  ]
+This is the body text/plain part.
+EOF
+
+# check it
+start_test 'conflicting text/plain, part 1 switches'
+run_prog mhshow -prefer text/plain -part 1 -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : part conflicting text/plain, part 1 switches
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 2 - text/plain -   93B  ]
+_______________________________________________
+This is the final text/plain signature part.
+EOF
+
+# check it
+start_test 'final text/plain part'
+run_prog mhshow -part 2 -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : part 2
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.2 - text/plain -   33B  ]
+This is the body text/plain part.
+[ part 2 - text/plain -   93B  ]
+_______________________________________________
+This is the final text/plain signature part.
+EOF
+
+# check it
+start_test 'all text/plain parts'
+run_prog mhshow -type text/plain -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : type text/plain
+
+# Write the expected output.
+cat > $expected <<EOF
+[ Message inbox:11 ]
+[ part 1.1 - text/plain -   33B  ]
+This is the body text/plain part.
+[ part 2 - text/plain -   93B  ]
+_______________________________________________
+This is the final text/plain signature part.
+EOF
+
+start_test 'prefer text/plain'
+run_prog mhshow -prefer text/plain -form mhl.null $msgnum > $actual 2>&1
+check "$expected" "$actual" : prefer text/plain
+
+
+finish_test
+exit $failed

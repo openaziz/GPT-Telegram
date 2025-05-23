@@ -1,0 +1,75 @@
+#!/bin/sh
+######################################################
+#
+# Test that whatnow's "cd" copes with directory names
+# which have spaces and quotes in them (see bug #23319)
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# Set TERM to get consistent output.
+TERM=dumb; export TERM
+
+SPDIR="$MH_TEST_DIR/foo's bar"
+rm -rf "$SPDIR"
+mkdir "$SPDIR"
+(cd "$SPDIR"  &&  touch baz boz)
+
+expectederr=$MH_TEST_DIR/$$.expectederr
+actualerr=$MH_TEST_DIR/$$.actualerr
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/$$.actual
+
+#
+# Handle different output depending on readline version
+#
+
+set +e
+whatnowtest=`echo cd | whatnow -prompt ''`
+set -e
+case ${whatnowtest} in
+    cd) cat > "$expected" <<EOF
+cd ${MH_TEST_DIR}/foo\'s\ bar
+pwd
+$SPDIR
+EOF
+    # If path to $SPDIR is too long, readline will wrap and disturb
+    # the actual output.  It obeys COLUMNS, so set that to a value
+    # that should be longer that $SPDIR plus a bit more.
+    COLUMNS=`getconf PATH_MAX . 2>/dev/null`  ||  COLUMNS=8192
+    export COLUMNS
+    ;;
+    "") cat > "$expected" <<EOF
+$SPDIR
+EOF
+    ;;
+    *) echo "Unknown response to whatnow readline test"
+    echo "Response is: ${whatnowtest}"
+    exit 1
+    ;;
+esac
+
+cat > $expectederr <<EOF
+EOF
+
+# ||true to ignore whatnow's exit status
+# watch the quoting -- shell and printf and then the shell run inside whatnow
+printf 'cd %s/foo\\'"'"'s\\ bar\npwd\n' "$MH_TEST_DIR" | \
+  run_prog whatnow -noedit -prompt '' 2> "$actualerr" > "$actual" || true
+
+check "$expectederr" "$actualerr"
+check "$expected" "$actual"
+
+test ${failed:-0} -eq 0  &&  rm -r "$SPDIR"
+
+exit $failed

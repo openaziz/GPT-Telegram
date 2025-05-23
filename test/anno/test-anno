@@ -1,0 +1,243 @@
+#!/bin/sh
+######################################################
+#
+# Test anno
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' anno -
+check_exit '-eq 1' anno -comp
+check_exit '-eq 1' anno -comp foo -comp bar
+check_exit '-eq 1' anno -text
+check_exit '-eq 1' anno -text foo -text bar
+check_exit '-eq 1' anno -number 0
+check_exit '-eq 1' anno -number -number
+check_exit '-eq 1' anno + @
+check_exit '-eq 1' anno -draft 42
+check_exit '-eq 1' anno -draft -list </dev/null
+check_exit '-eq 1' anno -draft -list -comp foo
+check_exit '-eq 1' anno -draft -comp f.o:
+check_exit '-eq 1' anno -draft -comp ''
+x=tendixzehn
+l=$x$x$x$x$x
+c=$l$l
+d=$c$c$c$c$c
+check_exit '-eq 1' anno -draft -comp $d$c$c$c$c$l$x$x$x${x}123456789
+
+expected=$MH_TEST_DIR/$$.expected
+expected_err=$MH_TEST_DIR/$$.expected_err
+actual=$MH_TEST_DIR/$$.actual
+actual_err=$MH_TEST_DIR/$$.actual_err
+
+# check -help
+start_test "-help"
+cat >"$expected" <<EOF
+Usage: anno [+folder] [msgs] [switches]
+  switches are:
+  -component field
+  -[no]inplace
+  -[no]date
+  -text body
+  -version
+  -help
+  -(dr)aft
+  -(l)ist
+  -(de)lete
+  -(nu)mber
+  -(a)ppend
+  -([no]p)reserve
+EOF
+
+#### Skip nmh intro text.
+run_prog anno -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `anno -v` in
+  anno\ --*) ;;
+  *        ) printf '%s: anno -v generated unexpected output\n' "$0" >&2
+             failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test "unknown switch"
+run_test "anno -nonexistent" 'anno: -nonexistent unknown'
+
+cat "${MH_TEST_DIR}/Mail/inbox/1" >"${MH_TEST_DIR}/Mail/inbox/11"
+
+# check with no switches
+start_test "with no switches"
+printf 'Nmh-test:\n' >"$expected"
+cat "${MH_TEST_DIR}/Mail/inbox/1" >>"$expected"
+folder -fast 1 >/dev/null
+
+printf 'Nmh-test' | run_prog anno >/dev/null
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual" 'keep first'
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -component
+start_test "-component"
+run_prog anno -component Nmh-test
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual" 'keep first'
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check +folder
+start_test "+folder"
+run_prog anno -component Nmh-test +inbox
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual" 'keep first'
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check msg
+start_test "msg"
+folder -fast 2 >/dev/null
+run_prog anno 1 -component Nmh-test
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual" 'keep first'
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+check_for_hard_links
+if [ $hard_links_supported -eq 1 ]; then
+  # check -noinplace
+  start_test "-noinplace"
+  # Hard link the message and verify that the new one doesn't get annotated.
+  cp "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.copy"
+  ln "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link"
+  run_prog anno 8 -component Nmh-test -noinplace
+  mv -f "${MH_TEST_DIR}/Mail/inbox/8.copy" "${MH_TEST_DIR}/Mail/inbox/8"
+  check "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link" \
+    'keep first'
+
+  # check -inplace
+  start_test "-inplace"
+  # Hard link the message and verify that the new one does get annotated.
+  ln "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link"
+  run_prog anno 8 -component Nmh-test -noinplace -inplace
+  check "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link"
+fi
+
+# check -nodate.  Without -text, it doesn't change the message.
+start_test "-nodate.  Without -text, it doesn't change the message."
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "$expected-nodate"
+run_prog anno 1 -component Nmh-test -nodate
+cp -f "${MH_TEST_DIR}/Mail/inbox/1" "$actual"
+check "$expected-nodate" "$actual"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -date
+start_test "-date"
+run_prog anno 1 -component Nmh-test -nodate -date
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual" 'keep first'
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -draft.
+start_test "-draft."
+cp -f "${MH_TEST_DIR}/Mail/inbox/1" "${MH_TEST_DIR}/Mail/draft"
+run_prog anno -draft -component Nmh-test
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/draft" >"$actual"
+check "$expected" "$actual"
+rm "${MH_TEST_DIR}/Mail/draft"
+
+# check -append
+start_test "-append"
+sed -e 's/\(Subject: Testing message 1\)/\1\
+Nmh-test:/' <"${MH_TEST_DIR}/Mail/inbox/1" >"$expected"
+run_prog anno 1 -component Nmh-test -append
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -list
+start_test "-list"
+printf 'Nmh-test: test of anno -list\n' >"$expected"
+cat "${MH_TEST_DIR}/Mail/inbox/1" >>"$expected"
+run_prog anno 1 -component Nmh-test -nodate -text 'test of anno -list'
+run_test 'anno 1 -component Nmh-test -list' 'test of anno -list'
+# check -text
+start_test "-text"
+check "$expected" "${MH_TEST_DIR}/Mail/inbox/1"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -list -number
+start_test "-list -number"
+printf 'Nmh-test: test of anno -list -number\n' >"$expected"
+cat "${MH_TEST_DIR}/Mail/inbox/1" >>"$expected"
+run_prog anno 1 -component Nmh-test -nodate -text 'test of anno -list -number'
+run_test 'anno 1 -component Nmh-test -list -number' \
+         '1	test of anno -list -number'
+check "$expected" "${MH_TEST_DIR}/Mail/inbox/1"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -delete
+start_test "-delete"
+cp "${MH_TEST_DIR}/Mail/inbox/1" "$expected"
+run_prog anno 1 -component Nmh-test
+run_prog anno 1 -component Nmh-test -delete
+sed -e 's/^Nmh-test:.*/Nmh-test:/' "${MH_TEST_DIR}/Mail/inbox/1" >"$actual"
+check "$expected" "$actual"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -delete -number
+start_test "-delete -number"
+printf 'Nmh-test: 1\nNmh-test: 3\n' >"$expected"
+cat "${MH_TEST_DIR}/Mail/inbox/1" >>"$expected"
+run_prog anno 1 -component Nmh-test -nodate -text 3
+run_prog anno 1 -component Nmh-test -nodate -text 2
+run_prog anno 1 -component Nmh-test -nodate -text 1
+run_prog anno 1 -component Nmh-test -delete -number 2
+cp -f "${MH_TEST_DIR}/Mail/inbox/1" "$actual"
+check "$expected" "$actual"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -delete -all
+start_test "-delete -all"
+cp "${MH_TEST_DIR}/Mail/inbox/1" "$expected"
+run_prog anno 1 -component Nmh-test -nodate -text 3
+run_prog anno 1 -component Nmh-test -nodate -text 2
+run_prog anno 1 -component Nmh-test -nodate -text 1
+run_prog anno 1 -component Nmh-test -delete -number all
+cp -f "${MH_TEST_DIR}/Mail/inbox/1" "$actual"
+check "$expected" "$actual"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -preserve
+start_test "-preserve"
+touch -t '201210010000.00' "${MH_TEST_DIR}/Mail/inbox/1"
+ls -l "${MH_TEST_DIR}/Mail/inbox/1" >"$actual-ls1"
+run_prog anno 1 -component Nmh-test -preserve
+run_prog anno 1 -component Nmh-test -preserve -delete
+ls -l "${MH_TEST_DIR}/Mail/inbox/1" >"$actual-ls2"
+check "$actual-ls1" "$actual-ls2"
+cp -f "${MH_TEST_DIR}/Mail/inbox/11" "${MH_TEST_DIR}/Mail/inbox/1"
+
+# check -nopreserve
+start_test "-nopreserve"
+touch -t '2012100100.00' "${MH_TEST_DIR}/Mail/inbox/1"
+ls -l "${MH_TEST_DIR}/Mail/inbox/1" >"$actual-ls1"
+run_prog anno 1 -component Nmh-test -preserve -nopreserve
+run_prog anno 1 -component Nmh-test -preserve -nopreserve -delete
+ls -l "${MH_TEST_DIR}/Mail/inbox/1" >"$actual-ls2"
+set +e
+diff "$actual-ls1" "$actual-ls2" >/dev/null
+run_test 'printf 1' "$?"
+set -e
+rm "$actual-ls1" "$actual-ls2"
+
+
+finish_test
+exit ${failed:-0}

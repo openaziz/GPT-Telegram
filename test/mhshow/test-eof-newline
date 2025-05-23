@@ -1,0 +1,62 @@
+#!/bin/sh
+######################################################
+#
+# Test mhparse on lack of newline at end of file.
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+# check message without newline at end
+start_test "message without newline at end"
+msgfile=`mhpath new`
+msgnum=`basename $msgfile`
+printf %s >"$msgfile" \
+"Content-Type: multipart/alternative; boundary=2b693c177a9c8680f38e8386a161840e
+Date: Tue, 09 Mar 2021 14:08:54 +0000 (UTC)
+Mime-Version: 1.0
+
+--2b693c177a9c8680f38e8386a161840e
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=UTF-8
+Mime-Version: 1.0
+
+There isn't a newline at the end of this file.
+
+--2b693c177a9c8680f38e8386a161840e
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=UTF-8
+Mime-Version: 1.0
+
+<!DOCTYPE html>
+<html><body>
+There isn't a newline at the end of this file.
+</body></html>
+
+--2b693c177a9c8680f38e8386a161840e--"
+
+# Write the expected output.
+cat >"$expected" <<EOF
+[ Message inbox:11 ]
+[ part 2 - text/plain -   47B  ]
+There isn't a newline at the end of this file.
+EOF
+
+run_prog mhshow -part 2 -form mhl.null $msgnum >"$actual" 2>&1
+check "$expected" "$actual" : check number 1
+
+
+finish_test
+exit $failed

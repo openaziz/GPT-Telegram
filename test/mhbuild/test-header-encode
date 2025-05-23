@@ -1,0 +1,416 @@
+#!/bin/sh
+######################################################
+#
+# Test encoding headers according to RFC 2047
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "${MH_OBJ_DIR}/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' mhbuild -h
+
+testname="${MH_TEST_DIR}/$$"
+backupname="${MH_TEST_DIR}/`mhparam sbackup`$$"
+
+#
+# We're going to hardcode UTF-8 for this test.
+#
+require_locale $en_locales
+
+#
+# Basic test of encoding a short subject
+#
+cat > "${testname}.basic.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä test
+
+This is a test
+EOF
+
+cat > "${testname}.basic.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?This_is_=C3=A4_test?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test
+EOF
+
+run_prog mhbuild "${testname}.basic.actual"
+
+check "${testname}.basic.actual" "${testname}.basic.expected" 'keep first'
+
+#
+# Make sure we can undo the encoding
+#
+
+run_test 'eval fmttest -outsize max -format "%(decode{subject})" -message -file "${testname}.basic.actual"' 'This is ä test'
+
+rm -f "${testname}.basic.actual"
+
+#
+# Basic test of encoding a short subject, but with base64
+#
+cat > "${testname}.basic.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä test
+
+This is a test
+EOF
+
+cat > "${testname}.basic.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?B?VGhpcyBpcyDDpCB0ZXN0?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test
+EOF
+
+run_prog mhbuild -headerencoding base64 "${testname}.basic.actual"
+
+check "${testname}.basic.actual" "${testname}.basic.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{subject})" -message -file "${testname}.basic.actual"' 'This is ä test'
+
+rm -f "${testname}.basic.actual" "${backupname}.basic.actual.orig"
+
+#
+# Have a subject that will pick base64 as the shorter encoding
+#
+
+cat > "${testname}.autopick.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä tëst©
+
+This is a test
+EOF
+
+cat > "${testname}.autopick.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?B?VGhpcyBpcyDDpCB0w6tzdMKp?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test
+EOF
+
+run_prog mhbuild "${testname}.autopick.actual"
+
+check "${testname}.autopick.actual" "${testname}.autopick.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{subject})" -message -file "${testname}.autopick.actual"' 'This is ä tëst©'
+
+rm -f "${testname}.autopick.actual" "${backupname}.autopick.actual.orig"
+
+#
+# Tests using longer subject lines.
+#
+
+cat > "${testname}.longsubject1.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä tëst of a rather long sübject line; will it overflow
+  the line length?  I sure hope thät ='s and _'s are encoded properly.  Will
+  they be?
+
+This is a test of a very long subject line.
+EOF
+
+cat > "${testname}.longsubject1.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?This_is_=C3=A4_t=C3=ABst_of_a_rather_long_s=C3=BCbject_?=
+         =?UTF-8?Q?line;_will_it_overflow_the_line_length=3F__I_sure_hope_?=
+         =?UTF-8?Q?th=C3=A4t_=3D's_and_=5F's_are_encoded_properly.__Will_t?=
+         =?UTF-8?Q?hey_be=3F?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test of a very long subject line.
+EOF
+
+run_prog mhbuild "${testname}.longsubject1.actual"
+
+check "${testname}.longsubject1.actual" "${testname}.longsubject1.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(putlit(decode(trim{subject})))" -message -file "${testname}.longsubject1.actual"' "This is ä tëst of a rather long sübject line; will it overflow the line length?  I sure hope thät ='s and _'s are encoded properly.  Will they be?"
+
+rm -f "${testname}.longsubject1.actual" "${backupname}.longsubject1.actual.orig"
+
+#
+# Test a longer line with base64 encoding
+#
+
+cat > "${testname}.longsubject2.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä tëst øf ä räthër løng sübjëct line; will it øvërfløw
+  the line length?  I sure hope thät ='s and "'s are encoded properly.  Will
+  they be?
+
+This is a test of a very long subject line using base64.
+EOF
+
+cat > "${testname}.longsubject2.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?B?VGhpcyBpcyDDpCB0w6tzdCDDuGYgw6QgcsOkdGjDq3IgbMO4bmcg?=
+         =?UTF-8?B?c8O8YmrDq2N0IGxpbmU7IHdpbGwgaXQgw7h2w6tyZmzDuHcgdGhl?=
+         =?UTF-8?B?IGxpbmUgbGVuZ3RoPyAgSSBzdXJlIGhvcGUgdGjDpHQgPSdzIGFu?=
+         =?UTF-8?B?ZCAiJ3MgYXJlIGVuY29kZWQgcHJvcGVybHkuICBXaWxsIHRoZXkg?=
+         =?UTF-8?B?YmU/?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test of a very long subject line using base64.
+EOF
+
+run_prog mhbuild "${testname}.longsubject2.actual"
+
+check "${testname}.longsubject2.actual" "${testname}.longsubject2.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(putlit(decode(trim{subject})))" -message -file "${testname}.longsubject2.actual"' "This is ä tëst øf ä räthër løng sübjëct line; will it øvërfløw the line length?  I sure hope thät ='s and \"'s are encoded properly.  Will they be?"
+
+rm -f "${testname}.longsubject2.actual" "${backupname}.longsubject2.actual.orig"
+
+#
+# Another long test, but make sure multibyte characters are not split across
+# RFC-2047 tokens (prohibited by the standard).  Test both quoted-printable
+# and base64
+#
+
+cat > "${testname}.longsubject3.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is a test of a big UTF-8 multibyte character (😉); will
+  this work properly, or will it get truncated? 😨! Hopefully not
+
+This is another long test.
+EOF
+
+cat > "${testname}.longsubject3.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?This_is_a_test_of_a_big_UTF-8_multibyte_character_(?=
+         =?UTF-8?Q?=F0=9F=98=89);_will_this_work_properly,_or_will_it_get_?=
+         =?UTF-8?Q?truncated=3F_=F0=9F=98=A8!_Hopefully_not?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is another long test.
+EOF
+
+run_prog mhbuild "${testname}.longsubject3.actual"
+
+check "${testname}.longsubject3.actual" "${testname}.longsubject3.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(putlit(decode(trim{subject})))" -message -file "${testname}.longsubject3.actual"' "This is a test of a big UTF-8 multibyte character (😉); will this work properly, or will it get truncated? 😨! Hopefully not"
+
+rm -f "${testname}.longsubject3.actual" "${backupname}.longsubject3.actual.orig"
+
+cat > "${testname}.longsubject4.actual" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: This is ä tëst øf å big ÜTF-8 (😉) mültibyte character; will
+  this wørk prøperly, ør will it get trµnᴬted? 😨! Hopefully nøt
+
+This is another long test.
+EOF
+
+cat > "${testname}.longsubject4.expected" <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?B?VGhpcyBpcyDDpCB0w6tzdCDDuGYgw6UgYmlnIMOcVEYtOCAo?=
+         =?UTF-8?B?8J+YiSkgbcO8bHRpYnl0ZSBjaGFyYWN0ZXI7IHdpbGwgdGhpcyB3?=
+         =?UTF-8?B?w7hyayBwcsO4cGVybHksIMO4ciB3aWxsIGl0IGdldCB0csK1bg==?=
+         =?UTF-8?B?4bSsdGVkPyDwn5ioISBIb3BlZnVsbHkgbsO4dA==?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is another long test.
+EOF
+
+run_prog mhbuild "${testname}.longsubject4.actual"
+
+check "${testname}.longsubject4.actual" "${testname}.longsubject4.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(putlit(decode(trim{subject})))" -message -file "${testname}.longsubject4.actual"' "This is ä tëst øf å big ÜTF-8 (😉) mültibyte character; will this wørk prøperly, ør will it get trµnᴬted? 😨! Hopefully nøt"
+
+rm -f "${testname}.longsubject4.actual" "${backupname}.longsubject4.actual.orig"
+
+#
+# Test out some basic email address encoding
+#
+
+cat > "${testname}.basicemail1.actual" <<EOF
+From: Mr Foo Bär <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: Impørtant stuff
+
+This is important information
+EOF
+
+cat > "${testname}.basicemail1.expected" <<EOF
+From: =?UTF-8?Q?Mr_Foo_B=C3=A4r?= <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?Imp=C3=B8rtant_stuff?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is important information
+EOF
+
+run_prog mhbuild "${testname}.basicemail1.actual"
+
+check "${testname}.basicemail1.actual" "${testname}.basicemail1.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{from})" -message -file "${testname}.basicemail1.actual"' "Mr Foo Bär <foobar@example.com>"
+run_test 'eval fmttest -outsize max -format "%(decode(friendly{from}))" -message -file "${testname}.basicemail1.actual"' "Mr Foo Bär"
+
+rm -f "${testname}.basicemail1.actual" "${backupname}.basicemail1.actual.orig"
+
+cat > "${testname}.basicemail2.actual" <<EOF
+From: foobar@example.com (Mr Foo Bär)
+To: Somebody <somebody@example.com>
+Subject: Impørtant stuff
+
+This is important information
+EOF
+
+cat > "${testname}.basicemail2.expected" <<EOF
+From: foobar@example.com (=?UTF-8?Q?Mr_Foo_B=C3=A4r?=)
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?Imp=C3=B8rtant_stuff?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is important information
+EOF
+
+run_prog mhbuild "${testname}.basicemail2.actual"
+
+check "${testname}.basicemail2.actual" "${testname}.basicemail2.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{from})" -message -file "${testname}.basicemail2.actual"' "foobar@example.com (Mr Foo Bär)"
+run_test 'eval fmttest -outsize max -format "%(decode(friendly{from}))" -message -file "${testname}.basicemail2.actual"' "Mr Foo Bär"
+
+rm -f "${testname}.basicemail2.actual" "${backupname}.basicemail2.actual.orig"
+
+#
+# Make sure the base64 encoder is tested as well
+#
+
+cat > "${testname}.basicemail3.actual" <<EOF
+From: Mr Føø Bär <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: Impørtant stuff
+
+This is important information
+EOF
+
+cat > "${testname}.basicemail3.expected" <<EOF
+From: =?UTF-8?B?TXIgRsO4w7ggQsOkcg==?= <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?Imp=C3=B8rtant_stuff?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is important information
+EOF
+
+run_prog mhbuild "${testname}.basicemail3.actual"
+
+check "${testname}.basicemail3.actual" "${testname}.basicemail3.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{from})" -message -file "${testname}.basicemail3.actual"' "Mr Føø Bär <foobar@example.com>"
+run_test 'eval fmttest -outsize max -format "%(decode(friendly{from}))" -message -file "${testname}.basicemail3.actual"' "Mr Føø Bär"
+
+rm -f "${testname}.basicemail3.actual" "${backupname}.basicemail3.actual.orig"
+
+cat > "${testname}.basicemail4.actual" <<EOF
+From: foobar@example.com (Mr Føø Bär)
+To: Somebody <somebody@example.com>
+Subject: Impørtant stuff
+
+This is important information
+EOF
+
+cat > "${testname}.basicemail4.expected" <<EOF
+From: foobar@example.com (=?UTF-8?B?TXIgRsO4w7ggQsOkcg==?=)
+To: Somebody <somebody@example.com>
+Subject: =?UTF-8?Q?Imp=C3=B8rtant_stuff?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is important information
+EOF
+
+run_prog mhbuild "${testname}.basicemail4.actual"
+
+check "${testname}.basicemail4.actual" "${testname}.basicemail4.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{from})" -message -file "${testname}.basicemail4.actual"' "foobar@example.com (Mr Føø Bär)"
+run_test 'eval fmttest -outsize max -format "%(decode(friendly{from}))" -message -file "${testname}.basicemail4.actual"' "Mr Føø Bär"
+
+rm -f "${testname}.basicemail4.actual" "${backupname}.basicemail4.actual.orig"
+
+#
+# A more complicated header; it includes groups, addresses that require
+# quoted-printable and base64, and unencoded email.
+#
+
+cat > "${testname}.complexemail1.actual" <<EOF
+From: "Mr Føø Bar" <foobar@example.com>
+To: "Mr F. One" <foo1@example.com>, "Mr F. Twø" <foo2@example.com>,
+  foo list: Føø Thrëë <foo3@example.com>, Foo Four <foo4@example.com>,
+  Foo Fivë <foo5@example.com>; Føø Sîx <foo6@example.com>,
+  "Mr F. Seven" <foo7@example.com>
+cc: "The Distingµishëd F. Sëvën" <foo7@example.com>
+Subject: Very long list
+
+This is a lot of people on this email!
+EOF
+
+cat > "${testname}.complexemail1.expected" <<EOF
+From: =?UTF-8?B?TXIgRsO4w7ggQmFy?= <foobar@example.com>
+To: "Mr F. One" <foo1@example.com>,
+    =?UTF-8?Q?Mr_F=2E_Tw=C3=B8?= <foo2@example.com>,
+    foo list: =?UTF-8?Q?F=C3=B8=C3=B8_Thr=C3=AB=C3=AB?= <foo3@example.com>,
+    Foo Four <foo4@example.com>,
+    =?UTF-8?Q?Foo_Fiv=C3=AB?= <foo5@example.com>;,
+    =?UTF-8?Q?F=C3=B8=C3=B8_S=C3=AEx?= <foo6@example.com>,
+    "Mr F. Seven" <foo7@example.com>
+cc: =?UTF-8?B?VGhlIERpc3RpbmfCtWlzaMOrZCBGLiBTw6t2w6tu?= <foo7@example.com>
+Subject: Very long list
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a lot of people on this email!
+EOF
+
+run_prog mhbuild "${testname}.complexemail1.actual"
+
+check "${testname}.complexemail1.actual" "${testname}.complexemail1.expected" 'keep first'
+
+run_test 'eval fmttest -outsize max -format "%(decode{to})" -message -file "${testname}.complexemail1.actual"' "\"Mr F. One\" <foo1@example.com>, Mr F. Twø <foo2@example.com>, foo list: Føø Thrëë <foo3@example.com>, Foo Four <foo4@example.com>, Foo Fivë <foo5@example.com>;, Føø Sîx <foo6@example.com>, \"Mr F. Seven\" <foo7@example.com>"
+run_test 'eval fmttest -outsize max -format "%(decode{cc})" -message -file "${testname}.complexemail1.actual"' "The Distingµishëd F. Sëvën <foo7@example.com>"
+
+rm -f "${testname}.complexemail1.actual" "${backupname}.complexemail1.actual.orig"
+
+exit ${failed:-0}

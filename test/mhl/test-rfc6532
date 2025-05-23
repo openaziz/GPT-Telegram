@@ -1,0 +1,111 @@
+#!/bin/sh
+######################################################
+#
+# Test compatibility with RFC 6532, Internationalized
+#   Email Headers
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "${MH_OBJ_DIR}/test/common.sh"
+
+setup_test
+mhl="${MH_LIBEXEC_DIR}/mhl"
+
+#### Make sure that html-to-text conversion is what we expect.
+require_locale $en_locales
+
+
+start_test 'UTF-8 headers'
+#### The -- position the multibyte characters to check edge
+#### cases in the 'UTF-8 headers with narrow width' test below.
+cat >`mhpath new` <<EOF
+From: sender--ø@example.com
+To: recipientæ@example.com
+To: recipient2@example.com
+Cc: recip--æ@example.com
+Subject: Blåbærsyltetøy
+Date: 20 May 2014 14:28:51 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+Blåbærsyltetøy er veldig godt. Jeg liker blåbærsyltetøy.
+Jøran.
+
+Text source:
+Arnt Gulbrandsen and Jiankang Yao, "Email Address Internationalization",
+Computing Edge 1:6, June 2015,
+http://www.computer.org/cms/computing-edge/ce-jun15-final.pdf, p. 50.
+EOF
+
+#### Just check that the (UTF-8) headers are displayed unscathed.  run_test
+#### squashes the trailing blank lines from mhl.
+run_test "$mhl -form mhl.headers `mhpath last`" \
+'Date:    20 May 2014 14:28:51 +0200
+To:      recipientæ@example.com,
+	 recipient2@example.com
+cc:      recip--æ@example.com
+From:    sender--ø@example.com
+Subject: Blåbærsyltetøy
+
+MIME-Version: 1.0'
+
+
+start_test 'UTF-8 headers with narrow width'
+run_test "$mhl -form mhl.headers -width 18 `mhpath last`" \
+'Date:    20 May 2
+     ***014 14:28
+     ***:51 +0200
+To:      recipien
+     ***tæ@exampl
+     ***e.com,
+	 recipien
+     ***t2@exampl
+     ***e.com
+cc:      recip--æ
+     ***@example.
+     ***com
+From:    sender--
+     ***ø@example
+     ***.com
+Subject: Blåbærsy
+     ***ltetøy
+
+MIME-Version: 1.0'
+
+
+start_test 'incompatible locale'
+# Show that LC_CTYPE is sufficient, if LC_ALL is unset.
+unset LC_ALL
+LC_CTYPE=C; export LC_CTYPE
+cat >"$MH_TEST_DIR/test.format" <<EOF
+; Doesn't decode From: or Subject:, to be really sure
+; that character replacement works.
+overflowtext="***",overflowoffset=5
+leftadjust,compwidth=9
+Date:formatfield="%<(nodate{text})%{text}%|%(pretty{text})%>"
+To:
+cc:
+From:
+Subject:
+EOF
+
+run_test "$mhl -form "$MH_TEST_DIR/test.format" `mhpath last`" \
+'Date:    20 May 2014 14:28:51 +0200
+To:      recipient??@example.com,
+	 recipient2@example.com
+cc:      recip--??@example.com
+From:    sender--??@example.com
+Subject: Bl??b??rsyltet??y'
+rm -f "$MH_TEST_DIR/test.format"
+
+
+finish_test
+exit $failed

@@ -1,0 +1,264 @@
+#!/bin/sh
+######################################################
+#
+# Test repl
+#
+######################################################
+
+# This is not a comprehensive test of repl, but some day it will be :-)
+# Please add to it.
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' repl -
+
+expected=$MH_TEST_DIR/$$.expected
+actual=$MH_TEST_DIR/Mail/draft
+
+
+# check -help
+start_test -help
+cat >$expected <<EOF
+Usage: repl: [+folder] [msg] [switches]
+  switches are:
+  -[no]group
+  -[no]annotate
+  -[no]cc all|to|cc|me
+  -draftfolder +folder
+  -draftmessage msg
+  -nodraftfolder
+  -editor editor
+  -noedit
+  -convertargs type argstring
+  -fcc folder
+  -filter filterfile
+  -form formfile
+  -([no]forma)t
+  -[no]inplace
+  -[no]mime
+  -[no]query
+  -whatnowproc program
+  -nowhatnowproc
+  -width columns
+  -version
+  -help
+  -(file) file
+  -(build)
+  -[no]atfile
+  -fmtproc program
+  -nofmtproc
+EOF
+
+#### Skip nmh intro text.
+run_prog repl -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test -version
+case `repl -v` in
+  repl\ --*) ;;
+  *        ) printf '%s: repl -v generated unexpected output\n' "$0" >&2
+             failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test 'unknown switch'
+run_test "repl -nonexistent" 'repl: -nonexistent unknown'
+
+# check with no switches
+start_test 'with no switches'
+run_test "repl" 'repl: no cur message'
+
+
+printf 'Local-Mailbox: mymailbox@localhost\n' >> "$MH"
+
+# check -cc me
+start_test '-cc me'
+cat >$expected <<EOF
+From: mymailbox@localhost
+To: Test1 <test1@example.com>
+cc: mymailbox@localhost
+Fcc: +outbox
+Subject: Re: Testing message 1
+In-reply-to: 1@test.nmh
+References: 1@test.nmh
+Comments: In-reply-to Test1 <test1@example.com>
+   message dated "Fri, 29 Sep 2006 00:00:00."
+--------
+EOF
+
+run_prog repl -cc me -editor true -nowhatnowproc 1
+check $expected $actual
+
+# check -nocc me
+start_test '-nocc me'
+cat >$expected <<EOF
+From: mymailbox@localhost
+To: Test1 <test1@example.com>
+cc: 
+Fcc: +outbox
+Subject: Re: Testing message 1
+In-reply-to: 1@test.nmh
+References: 1@test.nmh
+Comments: In-reply-to Test1 <test1@example.com>
+   message dated "Fri, 29 Sep 2006 00:00:00."
+--------
+EOF
+
+run_prog repl -cc me -nocc me -editor true -nowhatnowproc 1
+check $expected $actual
+
+# check -cc me with Local- and Alternate-Mailbox addtions, Bug #36635
+start_test '-cc me with Local- and Alternate-Mailbox addtions, Bug #36635'
+# -nocc me doesn't account for Alternate-Mailboxes.
+printf 'Alternate-Mailboxes: user@example.com\n' >> "$MH"
+
+cat >$expected <<EOF
+From: mymailbox@localhost
+To: Test1 <test1@example.com>
+cc: mymailbox@localhost
+Fcc: +outbox
+Subject: Re: Testing message 1
+In-reply-to: 1@test.nmh
+References: 1@test.nmh
+Comments: In-reply-to Test1 <test1@example.com>
+   message dated "Fri, 29 Sep 2006 00:00:00."
+--------
+EOF
+
+run_prog repl -cc me -editor true -nowhatnowproc 1
+check $expected $actual
+
+
+# check -nocc me with Local- and Alternate-Mailbox addtions, Bug #36635
+start_test '-nocc me with Local- and Alternate-Mailbox addtions, Bug #36635'
+# -nocc me doesn't account for Alternate-Mailboxes.
+cat >$expected <<EOF
+From: mymailbox@localhost
+To: Test1 <test1@example.com>
+cc: 
+Fcc: +outbox
+Subject: Re: Testing message 1
+In-reply-to: 1@test.nmh
+References: 1@test.nmh
+Comments: In-reply-to Test1 <test1@example.com>
+   message dated "Fri, 29 Sep 2006 00:00:00."
+--------
+EOF
+
+run_prog repl -cc me -nocc me -editor true -nowhatnowproc 1
+check $expected $actual
+
+
+# check quoting of local part of invalid address, Bug #26780
+start_test 'quoting of local part of invalid address, Bug #26780'
+cat >`mhpath new` <<EOF
+From: Test11 <test11@example.com>
+To: before_auser@example.com, A. User <auser@example.com>,
+ after_user@example.com
+Date: Fri, 29 Sep 2006 00:00:11
+Message-Id: 11@test.nmh
+Subject: Testing message 11
+
+This is message number 11
+
+EOF
+
+cat >$expected <<EOF
+From: mymailbox@localhost
+To: Test11 <test11@example.com>
+cc: before_auser@example.com, "A. User" <auser@example.com>,
+    after_user@example.com
+Fcc: +outbox
+Subject: Re: Testing message 11
+In-reply-to: 11@test.nmh
+References: 11@test.nmh
+Comments: In-reply-to Test11 <test11@example.com>
+   message dated "Fri, 29 Sep 2006 00:00:11."
+--------
+EOF
+
+run_prog repl -cc to -editor true -nowhatnowproc 11
+check $expected $actual
+
+
+# check that Fcc: header isn't propagated
+start_test "Fcc: header isn't propagated"
+form="${MH_TEST_DIR}/$$.components"
+cat > $form <<'EOF'
+From: sender@example.com
+%<{from}%(void(width))%(putaddr To: )%>
+Fcc:%<{fcc} %{fcc}%>
+Subject: %<{subject}Re: %(void{subject})%(trim)%(putstr)%>
+--------
+EOF
+cat > $expected <<EOF
+From: sender@example.com
+To: recipient@example.com
+Fcc:
+Subject: Re: suppress Fcc:
+--------
+EOF
+cat > `mhpath new`<<EOF
+From: recipient@example.com
+To: sender@example.com
+Fcc: +mischievous
+Subject: suppress Fcc:
+--------
+EOF
+
+run_prog repl -form "${form}" -nowhatnowproc last
+check "${expected}" "${actual}"
+
+
+# check -fcc with Fcc: in replied-to message
+start_test '-fcc with Fcc: in replied-to message'
+form="${MH_TEST_DIR}/$$.components"
+cat > $expected <<EOF
+From: sender@example.com
+To: recipient@example.com
+Fcc: +myoutbox
+Subject: Re: suppress Fcc:
+--------
+EOF
+
+run_prog repl -fcc +myoutbox -form "${form}" -nowhatnowproc last
+check "${expected}" "${actual}"
+
+
+# check repl to RFC 2047-encoded header with Re:
+cat >`mhpath new` <<EOF
+From: Mr Foo Bar <foobar@example.com>
+To: Somebody <somebody@example.com>
+Subject: =?ascii?Q?Re:_This_is_a_test?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This is a test
+EOF
+
+cat >$expected <<EOF
+From: sender@example.com
+To: Mr Foo Bar <foobar@example.com>
+Fcc:
+Subject: Re: This is a test
+--------
+EOF
+
+run_prog repl -form "${form}" -nowhatnowproc last
+check $expected $actual
+
+test "${failed:-0}" -eq 0 && rm "${form}"
+
+
+finish_test
+exit ${failed:-0}

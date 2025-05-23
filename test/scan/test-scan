@@ -1,0 +1,79 @@
+#!/bin/sh
+######################################################
+#
+# Test a simple scan.
+#
+######################################################
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' scan -
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+
+# check -width
+start_test '-width'
+cat >"$expected" <<EOF
+   1  09/29 Test1              Testing message 1<<This is message number 1 >>
+   2  09/29 Test2              Testing message 2<<This is message number 2 >>
+   3  09/29 Test3              Testing message 3<<This is message number 3 >>
+   4  09/29 Test4              Testing message 4<<This is message number 4 >>
+   5  09/29 Test5              Testing message 5<<This is message number 5 >>
+   6  09/29 Test6              Testing message 6<<This is message number 6 >>
+   7  09/29 Test7              Testing message 7<<This is message number 7 >>
+   8  09/29 Test8              Testing message 8<<This is message number 8 >>
+   9  09/29 Test9              Testing message 9<<This is message number 9 >>
+  10  09/29 Test10             Testing message 10<<This is message number 10 >>
+EOF
+
+run_prog scan +inbox -width 80 >"$actual" || exit 1
+check "$expected" "$actual"
+
+
+# check full output device, if one exists
+# if test -c /dev/full; then
+#   start_test 'full output device'
+#   printf 'scan: failed to fflush stdout: No space left on device\n' >"$expected"
+#   scan last >/dev/full 2>"$actual"  &&  false
+#   check "$expected" "$actual"
+# fi
+
+
+# check highlighting
+start_test 'highlighting'
+cat >"$expected" <<EOF
+   1  09/29 Test1              Testing message 1<<This is message number 1 >>[m
+   2  09/29 Test2              Testing message 2<<This is message number 2 >>[m
+   3  09/29 Test3              Testing message 3<<This is message number 3 >>[m
+   4  09/29 Test4              Testing message 4<<This is message number 4 >>[m
+[33;40m   5+ 09/29 Test5              Testing message 5<<This is message number 5 >>[m
+   6  09/29 Test6              Testing message 6<<This is message number 6 >>[m
+   7  09/29 Test7              Testing message 7<<This is message number 7 >>[m
+   8  09/29 Test8              Testing message 8<<This is message number 8 >>[m
+   9  09/29 Test9              Testing message 9<<This is message number 9 >>[m
+[36;40m  10  09/29 Test10             Testing message 10<<This is message number 10 >>[m
+EOF
+
+printf 'Unseen-Sequence: unseen\n' >> $MH
+mark -sequence cur 5
+mark -sequence unseen 10
+run_prog scan -form scan.highlighted -width 80 >"$actual" || exit 1
+check "$expected" "$actual"
+
+
+# check null input
+start_test 'null input'
+run_test 'scan -format "" -file /dev/null' ''
+
+
+finish_test
+exit $failed

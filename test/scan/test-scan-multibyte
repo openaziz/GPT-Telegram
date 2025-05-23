@@ -1,0 +1,187 @@
+#!/bin/sh
+############################################################
+#
+# Test scan to see if multibyte support (UTF-8 locale) works
+#
+# Other tests will get the normal ASCII case, so all we care
+# about here is UTF-8 encoded headers (RFC 2047).
+#
+# Note that this file should be edited via a UTF-8 aware
+# editor, since UTF-8 characters are in it.
+#
+############################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname "$0"`/../..
+    MH_OBJ_DIR=`cd "$srcdir" && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+if test "${MULTIBYTE_ENABLED}" -ne 1; then
+    test_skip "configure did not detect multibyte support"
+fi
+
+require_locale $en_locales
+
+#
+# Create a test message with RFC 2047 headers we can scan
+#
+# In this Subject header in this message is a "n" with a Combining Diaeresis
+# (U+0308).  There is different interpretation of this character with respect
+# to wcwidth() (which is supposed to return the column width of a character).
+# We use a test program to determine what the output width of U+0308 is
+# and adjust our test output appropriately.
+#
+# True Spın̈al Tap fans will note that David ﬆ Hubbins was born in Squatney,
+# London, England, and thus having his name language-tagged with "cy" is almost
+# certainly incorrect.  But in his own words: "Here lies David ﬆ Hubbins,
+# and why not?".
+#
+# The second "* in the To line is just to exercise the parser a bit.
+#
+
+cat > "${MH_TEST_DIR}/Mail/inbox/11" <<EOF
+From: David =?utf-8*cy?q?=EF=AC=86?= Hubbins <hubbins@example.com>
+To: Sir Denis =?utf-8*?q?Eton=E2=80=93Hogg? <sirdenis@example.com>
+Date: Friday, 2 Mar 1984 00:00:00
+Subject: =?utf-8?q?Sp=C4=B1n=CC=88al_Tap_=E2=86=92_Tap_into_America!?=
+
+Things are looking great!
+EOF
+
+width=`${MH_OBJ_DIR}/test/getcwidth "→n̈"`
+if test $? -ne 0; then
+    echo "getcwidth failed to run"
+    exit 1
+fi
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+
+start_test 'RFC 2047 headers'
+if test "$width" -eq 3; then
+cat > "$expected" <<EOF
+  11  03/02 David ﬆ Hubbins    Spın̈al Tap → Tap into America!<<Things are looki
+EOF
+elif test "$width" -eq 2; then
+cat > "$expected" <<EOF
+  11  03/02 David ﬆ Hubbins    Spın̈al Tap → Tap into America!<<Things are lookin
+EOF
+else
+    echo "Unsupported width for UTF-8 test string: $width"
+    exit 1
+fi
+
+run_prog scan -width 80 +inbox 11 > $actual || exit 1
+check "$expected" "$actual"
+
+
+#
+# Check decoding with an invalid multibyte sequence.  We skip this test
+# if we don't have iconv support, since it requires converting from one
+# character set to another.  Be sure we created the test file, though, because
+# it's required for the test right after it.
+#
+
+start_test 'invalid multibyte sequence'
+cat >`mhpath new` <<EOF
+From: Test12 <test12@example.com>
+To: Some User <user@example.com>
+Date: Mon, 31 Dec 2012 00:00:00
+Message-Id: 12@test.nmh
+Subject: =?UTF-8?B?MjAxMyBOZXcgWWVhcuKAmXMgRGVhbHMhIFN0YXJ0IHRoZSB5ZWFy?=
+	=?UTF-8?B?IHJpZ2h0IHdpdGggYmlnIHNhdmluZ3M=?=
+
+This message has an encoded Subject with an invalid character for
+single-byte character sets, but it (U+2019) is valid UTF-8.
+EOF
+
+if test "$ICONV_ENABLED" -eq 1; then
+    cat >"$expected" <<EOF
+  12  12/31 Test12             2013 New Year?s Deals! Start the year right
+EOF
+
+    # Don't use run_prog here because it loses the environment setting.
+    LC_ALL=C scan -width 74 last >"$actual"
+    check "$expected" "$actual"
+fi
+
+#
+# Find out the width of our Unicode apostrophe (U+2019).  Some implementations
+# say it has a width of 2, but that seems totally bizarre to me.
+#
+
+width=`${MH_OBJ_DIR}/test/getcwidth U+2019`
+if test $? -ne 0; then
+    echo "getcwidth failed to run"
+    exit 1
+fi
+
+# check scan width with a valid multibyte sequence
+start_test 'scan width with a valid multibyte sequence'
+if test "$width" -eq 1; then
+    cat >"$expected" <<EOF
+  12  12/31 Test12             2013 New Year’s Deals! Start the year right
+EOF
+elif test "$width" -eq 2; then
+    cat >"$expected" <<EOF
+  12  12/31 Test12             2013 New Year’s Deals! Start the year righ
+EOF
+else
+    echo "Unsupported width for U+2019: $width"
+fi
+
+run_prog scan -width 74 last >"$actual"
+check "$expected" "$actual"
+
+
+if test "$ICONV_ENABLED" -eq 1; then
+  start_test 'encoded single quote'
+  cat >"$expected" <<EOF
+  13  01/13 sender@example.co  <<The Subject: is an encoded single quote, 0x92. 
+EOF
+
+  cat >"${MH_TEST_DIR}/Mail/inbox/13" <<EOF
+From: <sender@example.com>
+Subject: =?iso-8859-1?B?kgo=?=
+Date: Mon, 13 Jan 2014 14:18:33 -0600
+
+The Subject: is an encoded single quote, 0x92.  cpstripped() didn't
+properly count it when decoding, which could be seen with:
+
+    scan -format '%(decode{subject})%{body}'
+
+The scan listing was two characters too long.
+EOF
+
+  run_prog scan -width 80 last >"$actual"
+  check "$expected" "$actual"
+fi
+
+
+start_test 'insufficient room for multicolumn character'
+#### This multibyte character requires 2 columns for display, but
+#### only 1 is availble.  cpstripped() used to get this wrong.
+
+cat >"$expected" <<EOF
+ 
+EOF
+
+cat >`mhpath new` <<EOF
+Mime-Version: 1.0
+
+在 Should not see any of this text
+EOF
+
+run_prog scan -format '%{body}' -width 1 last >"$actual"
+check "$expected" "$actual"
+
+
+finish_test
+exit $failed

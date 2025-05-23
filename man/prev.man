@@ -1,0 +1,88 @@
+.TH PREV %manext1% 1999-04-30 "%nmhversion%"
+.
+.\" %nmhwarning%
+.
+.SH NAME
+prev \- show the previous nmh message
+.SH SYNOPSIS
+.HP 5
+.na
+.B prev
+.RB [ \-help ]
+.RB [ \-version ]
+.RI [ +folder ]
+.RB [ \-showproc
+.IR program ]
+.RB [ \-showmimeproc
+.IR program ]
+.RB [ \-header " | " \-noheader ]
+.RB [ \-checkmime " | " \-nocheckmime ]
+[switches\ for
+.I showproc
+or
+.IR showmimeproc ]
+.ad
+.SH DESCRIPTION
+.B prev
+performs a
+.B show
+on the previous message in the specified
+(or current) folder.  Like
+.BR show ,
+it passes any switches on to
+the program named by
+.I showproc
+or
+.IR showmimeproc ,
+which is called
+to list the message.  This command is almost exactly equivalent to
+.RB \*(lq "show prev" \*(rq.
+Consult the manual entry for
+.IR show (1)
+for all the details.
+.SH FILES
+.fc ^ ~
+.nf
+.ta \w'%nmhetcdir%/ExtraBigFileName  'u
+^$HOME/.mh_profile~^The user profile
+.fi
+.SH "PROFILE COMPONENTS"
+.fc ^ ~
+.nf
+.ta 2.4i
+.ta \w'ExtraBigProfileName  'u
+^Path:~^To determine the user's nmh directory
+^Current\-Folder:~^To find the default current folder
+^showproc:~^Program to show non-MIME messages
+^showmimeproc:~^Program to show MIME messages
+.fi
+.SH "SEE ALSO"
+.IR next (1),
+.IR show (1)
+.SH DEFAULTS
+.nf
+.RB ` +folder "' defaults to the current folder"
+.RB ` \-checkmime '
+.RB ` \-header '
+.fi
+.SH CONTEXT
+If a folder is specified, it will become the current folder.  The message
+that is shown (i.e., the previous message in sequence) will become the
+current message.
+.SH BUGS
+.B prev
+is really a link to the
+.B show
+program.  As a result, if
+you make a link to
+.B prev
+and that link is not called
+.BR prev ,
+your link will act like
+.B show
+instead.  To circumvent this, add a
+profile-entry for the link to your
+.B nmh
+profile and add the argument
+.B prev
+to the entry.

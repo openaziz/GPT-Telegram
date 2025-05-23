@@ -1,0 +1,68 @@
+#!/bin/sh
+######################################################
+#
+# Test rcvtty
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+# Use proper program, likely not the first one on PATH.
+rcvtty="${MH_LIBEXEC_DIR}/rcvtty"
+
+check_exit '-eq 1' $rcvtty -
+
+expected="$MH_TEST_DIR/$$.expected"
+actual="$MH_TEST_DIR/$$.actual"
+
+
+# check -help
+start_test "-help"
+cat >"$expected" <<EOF
+Usage: rcvtty [command ...]
+  switches are:
+  -biff
+  -form formatfile
+  -(forma)t string
+  -width columns
+  -[no]newline
+  -[no]bell
+  -version
+  -help
+EOF
+
+#### Skip nmh intro text.
+run_prog "$rcvtty" -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `$rcvtty -v` in
+  rcvtty\ --*) ;;
+  *          ) printf '%s: rcvtty -v generated unexpected output\n' "$0" >&2
+               failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check normal operation.  Use -biff to avoid sending notification to
+start_test "normal operation.  Use -biff to avoid sending notification to"
+# each of the user's terminals.  So this command shouldn't do
+# anything.  It will write the notification(s) if the user actually
+# has actually enabled biff notification, or has set the exec bit of
+# any of their ttys.
+cat >"$expected" <<EOF
+EOF
+run_prog $rcvtty <${MH_TEST_DIR}/Mail/inbox/1 -biff >"$actual" 2>&1
+check "$expected" "$actual"
+
+
+finish_test
+exit ${failed:-0}

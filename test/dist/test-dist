@@ -1,0 +1,514 @@
+#!/bin/sh
+######################################################
+#
+# Test dist
+#
+######################################################
+
+set -e
+
+if test -z "${MH_OBJ_DIR}"; then
+    srcdir=`dirname $0`/../..
+    MH_OBJ_DIR=`cd $srcdir && pwd`; export MH_OBJ_DIR
+fi
+
+. "$MH_OBJ_DIR/test/common.sh"
+
+setup_test
+
+check_exit '-eq 1' dist -
+check_exit '-eq 1' dist -editor
+check_exit '-eq 1' dist -editor foo -editor
+check_exit '-eq 1' dist -nowhatnowproc -whatnowproc foo -whatnowproc
+check_exit '-eq 1' dist -file
+check_exit '-eq 1' dist -file foo -file bar
+check_exit '-eq 1' dist -form
+check_exit '-eq 1' dist -draftfolder
+check_exit '-eq 1' dist -draftfolder foo -draftfolder bar
+check_exit '-eq 1' dist -draftmessage
+check_exit '-eq 1' dist -draftmessage 42 -draftmessage 314
+check_exit '-eq 1' dist -from
+check_exit '-eq 1' dist -to
+check_exit '-eq 1' dist -cc
+check_exit '-eq 1' dist -fcc
+check_exit '-eq 1' dist -width
+check_exit '-eq 1' dist -width 42 -width 0
+check_exit '-eq 1' dist -atfile -noatfile -
+check_exit '-eq 1' dist + @
+check_exit '-eq 1' dist 42 314
+check_exit '-eq 1' dist -file foo 42
+
+expected=$MH_TEST_DIR/$$.expected
+expected_err=$MH_TEST_DIR/$$.expected_err
+actual=$MH_TEST_DIR/$$.actual
+actual_err=$MH_TEST_DIR/$$.actual_err
+localmbox=`${MH_LIBEXEC_DIR}/ap -format "%(localmbox)" 0 | sed 's/^<\(.*\)>$/\1/'`
+
+#### Use sendmail/pipe below to override default mts.
+mts_fakesendmail="${MHMTSCONF}-fakesendmail"
+sed -e 's/^mts:.*/mts: sendmail\/pipe/' "${MHMTSCONF}" > "$mts_fakesendmail"
+printf 'sendmail: %s/test/fakesendmail\n' "$srcdir" >>"$mts_fakesendmail"
+MHMTSCONF="$mts_fakesendmail"
+
+# arguments: dist switches
+test_dist ()
+{
+  printf 'send\n' | run_prog dist "$@" >/dev/null
+
+  # fakesendmail drops the message and any cc's into this mbox.
+  mbox="${MH_TEST_DIR}"/Mail/fakesendmail.mbox
+  inc -silent -file "$mbox"
+  rm -f "$mbox"
+
+  # It's hard to calculate the exact Date: header post is going to
+  # use, so we'll just use sed to remove the actual date so we can
+  # easily compare it against our "correct" output.
+  sed -e 's/^Resent-Date:.*/Resent-Date:/' `mhpath last` > "$actual"
+
+  check "$expected" "$actual"
+}
+
+# arguments: message_number
+wait_for_annotation ()
+{
+  # The annotation is done by a separate process, so we need to wait for
+  # it to complete.
+  i=1
+  until grep '^Resent:' "${MH_TEST_DIR}"/Mail/inbox/$1 >/dev/null; do
+    sleep 1
+    arith_eval $i + 1
+    i=$arith_val
+    if [ $i -gt 60 ]; then
+      printf '%s: -annotate failed, will not wait any longer\n' "$0"
+      break
+    fi
+  done
+}
+
+
+# check -help
+start_test "-help"
+cat >"$expected" <<EOF
+Usage: dist [+folder] [msg] [switches]
+  switches are:
+  -[no]annotate
+  -draftfolder +folder
+  -draftmessage msg
+  -nodraftfolder
+  -editor editor
+  -noedit
+  -form formfile
+  -[no]inplace
+  -whatnowproc program
+  -nowhatnowproc
+  -version
+  -help
+  -from address
+  -to address
+  -cc address
+  -fcc mailbox
+  -width columns
+  -[no]atfile
+EOF
+
+#### Skip nmh intro text.
+dist -help 2>&1 | sed '/^$/,$d' >"$actual"
+check "$expected" "$actual"
+
+# check -version
+start_test "-version"
+case `dist -v` in
+  dist\ --*) ;;
+  *        ) printf '%s: dist -v generated unexpected output\n' "$0" >&2
+             failed=`expr ${failed:-0} + 1`;;
+esac
+
+# check unknown switch
+start_test "unknown switch"
+run_test "dist -nonexistent" 'dist: -nonexistent unknown'
+
+folder +outbox -create -fast >/dev/null
+folder +inbox -fast 1 >/dev/null
+
+# For most tests, use -nowhatnow and just check that the draft
+# looks correct.
+
+# check basic dist operation, including -noedit and -to
+start_test "basic dist operation, including -noedit and -to"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist -noedit -to somebody@example.com
+
+# check +folder and msg
+start_test "+folder and msg"
+folder +outbox -fast >/dev/null
+
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist +inbox 1 -noedit -to somebody@example.com
+
+# check -form
+start_test "-form"
+cat >"${MH_TEST_DIR}/Mail/distform" <<'EOF'
+Resent-From: me@example.com
+Resent-To: you@example.com
+EOF
+
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: me@example.com
+Resent-To: you@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist 1 -noedit -form "${MH_TEST_DIR}"/Mail/distform
+
+rm "${MH_TEST_DIR}"/Mail/distform
+
+# check -annotate
+start_test "-annotate"
+cat >"$expected" <<EOF
+From: Test2 <test2@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 2@test.nmh
+Subject: Testing message 2
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 2
+EOF
+
+test_dist 2 -noedit -to somebody@example.com -annotate
+wait_for_annotation 2
+
+cat >"$expected" <<EOF
+Resent:
+Resent: somebody@example.com
+From: Test2 <test2@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 2@test.nmh
+Subject: Testing message 2
+
+This is message number 2
+EOF
+
+# Strip date from line of this form:
+# Resent: Sat, 06 Oct 2012 08:24:08 -0500
+sed -e 's/^Resent:.*:.*/Resent:/' "${MH_TEST_DIR}"/Mail/inbox/2 >"$actual"
+
+check "$expected" "$actual"
+
+# check -noannotate
+start_test "-noannotate"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist 1 -noedit -to somebody@example.com -annotate -noannotate
+
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+
+This is message number 1
+EOF
+
+check "${MH_TEST_DIR}"/Mail/inbox/1 "$expected" 'keep first'
+
+check_for_hard_links
+if [ $hard_links_supported -eq 1 ]; then
+  # check -noinplace
+  start_test "-noinplace"
+  # Hard link the message and verify that the new one doesn't get annotated.
+  cp "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.copy"
+  ln "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link"
+  cat >"$expected" <<EOF
+From: Test8 <test8@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 8@test.nmh
+Subject: Testing message 8
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 8
+EOF
+  test_dist 8 -noedit -to somebody@example.com -annotate -noinplace
+  wait_for_annotation 8
+  mv -f "${MH_TEST_DIR}/Mail/inbox/8.copy" "${MH_TEST_DIR}/Mail/inbox/8"
+  check "${MH_TEST_DIR}/Mail/inbox/8" "${MH_TEST_DIR}/Mail/inbox/8.link" \
+    'keep first'
+
+  # check -inplace
+  start_test "-inplace"
+  # Hard link the message and verify that the new one does get annotated.
+  ln "${MH_TEST_DIR}/Mail/inbox/9" "${MH_TEST_DIR}/Mail/inbox/9.link"
+  cat >"$expected" <<EOF
+From: Test9 <test9@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 9@test.nmh
+Subject: Testing message 9
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 9
+EOF
+  test_dist 9 -noedit -to somebody@example.com -annotate -noinplace -inplace
+  wait_for_annotation 9
+  check "${MH_TEST_DIR}/Mail/inbox/9" "${MH_TEST_DIR}/Mail/inbox/9.link"
+fi
+
+# check -draftfolder
+start_test "-draftfolder"
+cat >"$expected" <<EOF
+From: Test3 <test3@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 3@test.nmh
+Subject: Testing message 3
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 3
+EOF
+
+test_dist 3 -noedit -to somebody@example.com -draftfolder drafts
+
+# check -draftmsg
+start_test "-draftmsg"
+cat >"$expected" <<EOF
+From: Test3 <test3@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 3@test.nmh
+Subject: Testing message 3
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 3
+EOF
+
+touch $MH_TEST_DIR/Mail/drafts/3
+test_dist 3 -noedit -to somebody@example.com -draftfolder drafts -draftmessage 2
+
+# check -nodraftfolder
+start_test "-nodraftfolder"
+cat >"$expected" <<EOF
+From: Test3 <test3@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 3@test.nmh
+Subject: Testing message 3
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 3
+EOF
+
+test_dist 3 -noedit -to somebody@example.com -draftfolder nonexistent \
+  -nodraftfolder
+if test -d "${MH_TEST_DIR}/Mail/nonexistent"; then
+  echo "$0: -nodraftfolder test failed."
+  failed=`expr ${failed:-0} + 1`
+fi
+
+# check -from
+start_test "-from"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: me@example.com
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist 1 -noedit -to somebody@example.com -from me@example.com
+
+# check -cc
+start_test "-cc"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-cc: cc@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist 1 -noedit -to somebody@example.com -cc cc@example.com
+
+# check -fcc
+start_test "-fcc"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist 1 -noedit -to somebody@example.com -fcc outbox
+run_test 'scan +outbox -width 6' '   1  '
+
+# check -fcc with +
+start_test "-fcc with +"
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: ${localmbox}
+Resent-To: somebody@example.com
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist +inbox 1 -noedit -to somebody@example.com -fcc +outbox
+run_test 'scan +outbox -width 6 2' '   2  '
+
+# check Distribute- and Distribution-
+start_test "Distribute- and Distribution-"
+cat >"$expected" <<EOF
+  -- Network Recipients --
+  dist-recipient at example.com
+EOF
+
+folder -f +inbox >/dev/null
+arith_eval `pick last` + 1
+new_msg=$arith_val
+cat >`mhpath new` <<EOF
+From: Test$new_msg <test$new_msg@example.com>
+Date: Sun, 10 May 2020 10:00:00
+EOF
+
+cat >`mhpath new` <<EOF
+Distribution-From: <a@example.com>
+Distribute-To: <dist-recipient@example.com>
+EOF
+
+mhdist=`pick last` mhaltmsg=`mhpath $new_msg` whom `mhpath last` >"$actual"
+check "$expected" "$actual"
+
+#
+# Check that dist encodes headers using RFC-2047 properly
+#
+start_test "dist encodes headers using RFC-2047 properly"
+require_locale $en_locales
+
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: =?UTF-8?Q?Mr_F=C3=B8o_Bar?= <resent-from@example.com>
+Resent-To: =?UTF-8?Q?Mr_Nobod=C3=BF?= <resent-to@example.com>
+Resent-Date:
+
+This is message number 1
+EOF
+
+test_dist +inbox 1 -noedit -from 'Mr Føo Bar <resent-from@example.com>' \
+	  -to 'Mr Nobodÿ <resent-to@example.com>' -fcc +outbox
+
+# check that mhdraft is assembled properly
+start_test "check mhdraft assembly"
+
+cat >"$expected" <<EOF
+From: Test1 <test1@example.com>
+To: Some User <user@example.com>
+Date: Fri, 29 Sep 2006 00:00:00
+Message-Id: 1@test.nmh
+Subject: Testing message 1
+Resent-From: resender@example.com
+Resent-To: recipient@example.com
+Resent-cc:
+Resent-fcc:
+
+This is message number 1
+EOF
+
+#### Capture $mhdraft in a postproc.  Then check to see that it doesn't
+#### have, for example, extra spaces in the header fields.
+postproc="${MH_TEST_DIR}/Mail/postproc"
+cat >"$postproc" <<EOF
+cp \$mhdraft $actual
+EOF
+chmod +x "$postproc"
+sed -e "s%\(postproc:\).*%\1 $postproc%" "$MH" >"$MH.new"
+mv -f "$MH.new" "$MH"
+
+printf 'send\n' | run_prog dist +inbox 1 -noedit -from 'resender@example.com' \
+    -to 'recipient@example.com' >/dev/null
+
+check "$actual" "$expected"
+
+
+finish_test
+exit ${failed:-0}

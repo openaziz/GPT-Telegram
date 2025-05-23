@@ -1,0 +1,47 @@
+#! /bin/sh
+##
+# fakesendmail - A fake sendmail program used by the nmh test suite
+#                to test the sendmail/smtp and sendmail/pipe mts
+#                methods.
+#
+# This code is Copyright (c) 2012, by the authors of nmh.  See the
+# COPYRIGHT file in the root or documentation directory of the nmh
+# distribution for complete copyright information.
+##
+
+if [ "$MH_TEST_DIR"x = x ]; then
+  printf '%s is intended for use only by the nmh test suite\n' "$0"
+  exit 1
+fi
+
+#### Puts message on stdin in a drop that the test knows about.
+deliver="$MH_LIBEXEC_DIR/rcvpack $MH_TEST_DIR/Mail/fakesendmail.mbox"
+
+found_dasht=0
+for arg in "$@"; do
+  [ "$arg" = -t ]  &&  found_dasht=1
+done
+
+if [ $found_dasht -eq 0 ]; then
+  # sendmail/smtp
+  msg=
+  datamode=0
+
+  printf '%s\n' "220 If it can't be done in Bourne shell it's not worth doing"
+  while read line; do
+    #### Strip off carriage returns, they confuse the pattern matching.
+    line=`printf %s "$line" | tr -d '\r'`
+
+    case "$line" in
+      DATA) printf '354 do tell\n'; datamode=1 ;;
+         .) printf '250 done\n'; datamode=0;
+            printf %s "$msg" | $deliver; msg= ;;
+      QUIT) printf '221 byenow\n'; break ;;
+         *) [ $datamode -eq 1 ]  &&  msg="${msg}${line}
+"  ||  printf '250 OK\n'
+    esac
+  done
+else
+  # sendmail/pipe
+  $deliver
+fi
